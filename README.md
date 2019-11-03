@@ -7,7 +7,7 @@ A pure, strict, eager, Haskell-like functional programming language for both scr
 - Pure: All side effects except non-termination are represented in the type system
 - Strict: Has a strict denotational semantics (omega-CPOs)
 - Eager: Variables are bound to values not thunks (contra Haskell)
-- Strongly Typed: Higher-kinded System FC with no type inference
+- Strongly Typed: Higher-kinded System FC with no type inference and type classes
 - Coverage Checking: all case expressions and pattern matching must be total
 - Type Classes: Haskell-style type classes are used for ad hoc polymorphism
 - Typed Holes: Parts of the program can be left unspecified and the type checker can provide information about it and its context
