@@ -2,7 +2,7 @@
 
 A pure, strict, eager, Haskell-like functional programming language for both scripting and systems programming, and maybe more!
 
-# Features
+# Language Itself
 
 - Pure: All side effects except non-termination are represented in the type system
 - Strict: Has a strict denotational semantics (omega-CPOs)
@@ -12,4 +12,16 @@ A pure, strict, eager, Haskell-like functional programming language for both scr
 - Type Classes: Haskell-style type classes are used for ad hoc polymorphism
 - Typed Holes: Parts of the program can be left unspecified and the type checker can provide information about it and its context
 - Modules: A clean module system like Agda's, usable for doing separate compilation if necessary.
+- FFI for a variety of ABIs
+
+# Compiler
+
 - Built-in Static Compilation: Out-of-the-box static compilation programs into a single binary with no dynamically linked libraries
+- Good error messages (ala Elm)
+
+# Ecosystem
+
+- Good package management and versioning
+- Testing (beyond Quickcheck-style "just a program" testing)
+- A good standard library (core datatypes + operations + efficient and elegant binary data handling)
+- A good set of essential utilities (net-y things, crypto)
