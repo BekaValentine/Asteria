@@ -13,6 +13,11 @@ A pure, strict, eager, Haskell-like functional programming language for both scr
 - Typed Holes: Parts of the program can be left unspecified and the type checker can provide information about it and its context
 - Modules: A clean module system like Agda's, usable for doing separate compilation if necessary.
 - FFI for a variety of ABIs
+- Efficient state types (scoped/bounded)
+- Equational rewrite rules
+- Non-blocking IO or equivalently performant construct
+- Shared memory or equivalently performant construct
+- Multicore support, multi-processor support
 
 # Compiler
 
@@ -25,3 +30,4 @@ A pure, strict, eager, Haskell-like functional programming language for both scr
 - Testing (beyond Quickcheck-style "just a program" testing)
 - A good standard library (core datatypes + operations + efficient and elegant binary data handling)
 - A good set of essential utilities (net-y things, crypto)
+- Debugger
