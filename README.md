@@ -19,10 +19,12 @@ A pure, strict, eager, Haskell-like functional programming language for both scr
 - Shared memory or equivalently performant construct
 - Multicore support, multi-processor support
 
-# Compiler
+# Compiler + REPL
 
 - Built-in Static Compilation: Out-of-the-box static compilation programs into a single binary with no dynamically linked libraries
 - Good error messages (ala Elm)
+- Stepper + variable viewer
+- Store info in call frames, etc. to figure out what types are stored in variables/registers
 
 # Ecosystem
 
