@@ -25,6 +25,7 @@ A pure, strict, eager, Haskell-like functional programming language for both scr
 - Good error messages (ala Elm)
 - Stepper + variable viewer
 - Store info in call frames, etc. to figure out what types are stored in variables/registers
+- Separate compilation for all independent components (i.e. top-level terms)
 
 # Ecosystem
 
