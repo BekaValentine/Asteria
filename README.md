@@ -5,7 +5,7 @@ A pure, strict, eager, Haskell-like functional programming language for both scr
 # Language Itself
 
 - Pure: All side effects except non-termination are represented in the type system
-- Strict: Has a strict denotational semantics (omega-CPOs)
+- Strict: Has a strict denotational semantics (omega-CPOs?) (Might not be necessary to give a denotational semantics at all??)
 - Eager: Variables are bound to values not thunks (contra Haskell)
 - Strongly Typed: Higher-kinded System FC with no type inference and type classes
 - Coverage Checking: all case expressions and pattern matching must be total
