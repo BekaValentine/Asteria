@@ -1,4 +1,4 @@
-# YAPL: Yet Another Programming Language
+# Asteria: Yet Another Programming Language
 
 A pure, strict, eager, Haskell-like functional programming language for both scripting and systems programming, and maybe more!
 
