@@ -1,22 +1,23 @@
-module where
+module
+
+  import Foo
+
+where
 
 class Monoid (a : Type) where
-  { mzero : a
-  ; mplus : a -> a -> a
-  }
+  mzero : a
+  mplus : a -> a -> a
 
 data Nat where
-  {  Zero : Nat
-  |  Suc (n : Nat) : Nat
-  }
+  Zero : Nat
+  Suc (n : Nat) : Nat
 
-type natural = Nat;
+type natural = Nat
 
-add : Nat -> Nat -> Nat;
-add Zero    n = n;
-add (Suc m) n = Suc (add m n);
+add : Nat -> Nat -> Nat
+add Zero    n = n
+add (Suc m) n = Suc (add m n)
 
-instance Monoid Nat where
-  { mzero = Zero
-  ; mplus x y = add x y
-  }
+instance Monoid Nat <= (Foo x) where
+  mzero = Zero
+  mplus x y = add x y

@@ -1,6 +1,6 @@
 module Parser.Type where
 
-import Text.Parsec
+import Text.Megaparsec
 
 import Parser.Common
 import Parser.Kind
@@ -16,12 +16,19 @@ import Syntax.Type
 --             |  forall TVK. B  (Forall Type)
 --             |  A B            (Type Application)
 parseType :: AsteriaParser Type
-parseType = parseFunctionType
+parseType = parseTypeExpr
   where
+
+    parseTypeExpr = parseFunctionType <|> parseNonFunctionType
 
     parseFunctionType :: AsteriaParser Type
     parseFunctionType =
-      chainr1 parseNonFunctionType (reservedOp "->" >> return FunT)
+      do a <- try $ do
+           a <- parseNonFunctionType
+           symbol "->"
+           return a
+         b <- parseTypeExpr
+         return (FunT a b)
 
     parseNonFunctionType :: AsteriaParser Type
     parseNonFunctionType =
@@ -31,27 +38,31 @@ parseType = parseFunctionType
 
     parseConstrainedType :: AsteriaParser Type
     parseConstrainedType =
-      do ccs <- parens (sepBy parseClassConstraint (reservedOp ","))
-         reservedOp "=>"
+      do ccs <- try $ do
+           ccs <- parens (sepBy parseClassConstraint (symbol ","))
+           symbol "=>"
+           return ccs
          b <- parseType
          return $ foldr ConstrainedT b ccs
 
     parseForallType :: AsteriaParser Type
     parseForallType =
-      do try $ reserved "forall"
-         as <- many1 parseTyVarKinding
-         reservedOp "."
+      do try $ symbol "forall"
+         as <- some parseTyVarKinding
+         symbol "."
          b <- parseType
          return $ foldr ForallT b as
 
     parseApplicationType :: AsteriaParser Type
     parseApplicationType =
-      chainl1 parseNonApplicationType (return AppT)
+      do t:ts <- some parseNonApplicationType
+         return (foldl AppT t ts)
 
     parseNonApplicationType :: AsteriaParser Type
     parseNonApplicationType =
-          parseVarType
-      <|> parseNameType
+          (parseVarType <?> "var type")
+      <|> (parseNameType <?> "con type")
+      <|> (parens parseTypeExpr <?> "parenthesized type")
 
     parseVarType :: AsteriaParser Type
     parseVarType = VarT <$> parseTypeVar
@@ -64,7 +75,7 @@ parseType = parseFunctionType
 -- ClassConstraint CC ::=  CCn a+  (Class Constraint)
 parseClassConstraint :: AsteriaParser ClassConstraint
 parseClassConstraint =
-  ClassConstraint <$> parseClassName <*> many1 parseTypeVar
+  ClassConstraint <$> (parseClassName <?> "class constraint name") <*> some (parseTypeVar <?> "class constraint argument")
 
 
 
@@ -73,6 +84,6 @@ parseTyVarKinding :: AsteriaParser TyVarKinding
 parseTyVarKinding =
   parens $ do
     a <- parseTypeVar
-    reservedOp ":"
+    symbol ":"
     k <- parseKind
     return $ TyVarKinding a k

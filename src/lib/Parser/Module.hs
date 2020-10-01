@@ -1,6 +1,8 @@
 module Parser.Module where
 
-import Text.Parsec
+import Text.Megaparsec
+import qualified Text.Megaparsec.Char.Lexer as L
+import Control.Monad.Combinators
 
 import Parser.Common
 import Parser.Names
@@ -16,24 +18,27 @@ import Syntax.Type
 -- RawModule RMod ::=  module TVK* Imp* where Decl*  (Raw Module)
 parseRawModule :: AsteriaParser RawModule
 parseRawModule =
-  do reserved "module"
-     tvks <- many parseTyVarKinding
+  do symbol "module"
+     newlineSpaceConsumer
      imps <- many parseImport
-     reserved "where"
+     newlineSpaceConsumer
+     symbol "where"
      decls <- many parseDeclaration
-     return $ RawModule tvks imps decls
+     return $ RawModule imps decls
 
 
 
 -- Import Imp ::=  import MName ImpAs? UH? Rens?
 parseImport :: AsteriaParser Import
-parseImport =
-  do reserved "import"
-     mp <- parseModulePath
-     impAs <- parseImportAs
-     usingHiding <- parseUsingHiding
-     rens <- parseRenamings
-     return $ Import mp impAs usingHiding rens
+parseImport = try $ L.nonIndented newlineSpaceConsumer $ L.indentBlock newlineSpaceConsumer p
+  where
+    p = do
+      try $ symbol "import"
+      mp <- parseModulePath
+      impAs <- parseImportAs
+      usingHiding <- parseUsingHiding
+      rens <- parseRenamings
+      return $ L.IndentNone (Import mp impAs usingHiding rens)
 
 
 
@@ -41,7 +46,7 @@ parseImport =
 --                  |  as MName  (Import As)
 parseImportAs :: AsteriaParser ImportAs
 parseImportAs =
-  do mloc <- optionMaybe (reserved "as" >> parseModuleName)
+  do mloc <- optional (symbol "as" >> parseModuleName)
      case mloc of
        Nothing -> return NoLocalName
        Just mn -> return (UseLocalName mn)
@@ -53,9 +58,9 @@ parseImportAs =
 --                  |  hiding (DN*)  (Hiding)
 parseUsingHiding :: AsteriaParser UsingHiding
 parseUsingHiding =
-  do muh <- optionMaybe
-              ((reserved "using" >> (UsingOnly <$> parens (many1 parseDeclaredName)))
-                <|> (reserved "hiding" >> (HidingOnly <$> parens (many1 parseDeclaredName))))
+  do muh <- optional
+              ((symbol "using" >> (UsingOnly <$> parens (some parseDeclaredName)))
+                <|> (symbol "hiding" >> (HidingOnly <$> parens (some parseDeclaredName))))
      case muh of
        Nothing -> return UsingAll
        Just uh -> return uh
@@ -73,9 +78,9 @@ parseDeclaredName =
 -- Renamings Rens ::=  renaming (Ren+)  (Renamings)
 parseRenamings :: AsteriaParser [Renaming]
 parseRenamings =
-  do mrens <- optionMaybe $ do
-                reserved "renaming"
-                parens (sepBy parseRenaming (reservedOp ";"))
+  do mrens <- optional $ do
+                symbol "renaming"
+                parens (sepBy parseRenaming (symbol ";"))
      case mrens of
        Nothing -> return []
        Just rens -> return  rens
@@ -93,14 +98,14 @@ parseRenaming =
     parseRenameIdentifier :: AsteriaParser Renaming
     parseRenameIdentifier =
       do ident1 <- parseIdentName
-         reserved "to"
+         symbol "to"
          ident2 <- parseIdentName
          return $ RenameIdent ident1 ident2
 
     parseRenameVariable :: AsteriaParser Renaming
     parseRenameVariable =
       do var1 <- parseVarName
-         reserved "to"
+         symbol "to"
          var2 <- parseVarName
          return $ RenameVar var1 var2
 
@@ -124,56 +129,68 @@ parseDeclaration =
   where
 
     parseDataDeclaration :: AsteriaParser Declaration
-    parseDataDeclaration =
-      do reserved "data"
-         tn <- parseTypeName
-         tvk <- many parseTyVarKinding
-         reserved "where"
-         condecls <- braces (sepBy parseConstructorDeclaration (reservedOp "|"))
-         return $ DataDecl tn tvk condecls
+    parseDataDeclaration = parseIndentDataDeclaration
+
+    parseIndentDataDeclaration :: AsteriaParser Declaration
+    parseIndentDataDeclaration = try $ L.nonIndented newlineSpaceConsumer $ L.indentBlock newlineSpaceConsumer p
+      where
+        p = do try $ symbol "data"
+               tn <- parseTypeName
+               tvk <- many parseTyVarKinding
+               symbol "where"
+               return (L.IndentMany
+                        Nothing
+                        (return . DataDecl tn tvk)
+                        parseConstructorDeclaration)
 
     parseTypeSynonymDeclaration :: AsteriaParser Declaration
-    parseTypeSynonymDeclaration =
-      do reserved "type"
-         f <- parseTypeVar
-         tvks <- many parseTyVarKinding
-         reservedOp "="
-         a <- parseType
-         reservedOp ";"
-         return $ TypeSynonymDecl f tvks a
+    parseTypeSynonymDeclaration = try $ L.nonIndented newlineSpaceConsumer $ L.indentBlock newlineSpaceConsumer p
+      where
+        p = do try $ symbol "type"
+               f <- parseTypeVar
+               tvks <- many parseTyVarKinding
+               symbol "="
+               a <- parseType
+               return (L.IndentNone (TypeSynonymDecl f tvks a))
 
     parseTypeClassDeclaration :: AsteriaParser Declaration
-    parseTypeClassDeclaration =
-      do reserved "class"
-         cn <- parseClassName
-         tvks <- many parseTyVarKinding
-         cons <- optionMaybe $ do
-                   reservedOp "<="
-                   parens $ many1 parseClassConstraint
-         reserved "where"
-         cls <- braces (sepBy parseMethodDeclaration (reservedOp ";"))
-         return $ ClassDecl cn tvks (maybe [] id cons) cls
+    parseTypeClassDeclaration = parseIndentTypeClassDeclaration
+
+    parseIndentTypeClassDeclaration :: AsteriaParser Declaration
+    parseIndentTypeClassDeclaration = try $ L.nonIndented newlineSpaceConsumer $ L.indentBlock newlineSpaceConsumer p
+      where
+        p = do try $ symbol "class"
+               cn <- parseClassName
+               tvks <- many parseTyVarKinding
+               cons <- optional $ do
+                         symbol "<="
+                         parens $ some parseClassConstraint
+               symbol "where"
+               return (L.IndentMany
+                        Nothing
+                        (return . ClassDecl cn tvks (maybe [] id cons))
+                        parseMethodDeclaration)
 
     parseTermTypeSignatureDeclaration :: AsteriaParser Declaration
-    parseTermTypeSignatureDeclaration =
-      do x <- try $ do
-           x <- parseTermVar
-           reservedOp ":"
-           return x
-         a <- parseType
-         reservedOp ";"
-         return $ TermTypeSig x a
+    parseTermTypeSignatureDeclaration = try $ L.nonIndented newlineSpaceConsumer $ L.indentBlock newlineSpaceConsumer p
+      where
+        p = do x <- try $ do
+                 x <- parseTermVar
+                 symbol ":"
+                 return x
+               a <- parseType
+               return (L.IndentNone (TermTypeSig x a))
 
     parseTermEquationDeclaration :: AsteriaParser Declaration
-    parseTermEquationDeclaration =
-      do (x,pats) <- try $ do
-           x <- parseTermVar
-           pats <- many parseEquationArg
-           reservedOp "="
-           return (x,pats)
-         n <- parseTerm
-         reservedOp ";"
-         return $ TermEquation x pats n
+    parseTermEquationDeclaration = try $ L.nonIndented newlineSpaceConsumer $ L.indentBlock newlineSpaceConsumer p
+      where
+        p = do (x,pats) <- try $ do
+                 x <- parseTermVar
+                 pats <- many parseEquationArg
+                 symbol "="
+                 return (x,pats)
+               n <- parseTerm
+               return (L.IndentNone (TermEquation x pats n))
 
     parseEquationArg :: AsteriaParser Pattern
     parseEquationArg =
@@ -182,16 +199,22 @@ parseDeclaration =
       <|> parens parsePattern
 
     parseInstanceDeclaration :: AsteriaParser Declaration
-    parseInstanceDeclaration =
-      do reserved "instance"
-         cn <- parseClassName
-         tvks <- many parseInstanceArgument
-         cons <- optionMaybe $ do
-                   reservedOp "<="
-                   parens $ many1 parseClassConstraint
-         reserved "where"
-         cls <- braces (sepBy parseMethodEquation (reservedOp ";"))
-         return $ InstanceDecl cn tvks (maybe [] id cons) cls
+    parseInstanceDeclaration = parseIndentInstanceDeclaration
+
+    parseIndentInstanceDeclaration :: AsteriaParser Declaration
+    parseIndentInstanceDeclaration = try $ L.nonIndented newlineSpaceConsumer $ L.indentBlock newlineSpaceConsumer p
+      where
+        p = do try $ symbol "instance"
+               cn <- parseClassName <?> "instance class name"
+               tvks <- many parseInstanceArgument
+               cons <- optional $ do
+                         symbol "<="
+                         parens $ some parseClassConstraint
+               symbol "where" <?> "where"
+               return (L.IndentMany
+                        Nothing
+                        (return . InstanceDecl cn tvks (maybe [] id cons))
+                        parseMethodEquation)
 
     parseInstanceArgument :: AsteriaParser Type
     parseInstanceArgument =
@@ -206,7 +229,7 @@ parseConstructorDeclaration :: AsteriaParser ConstructorDecl
 parseConstructorDeclaration =
   do cn <- parseTermName
      vks <- many (parens parseVarTyping)
-     reservedOp ":"
+     symbol ":"
      a <- parseType
      return $ ConstructorDecl cn vks a
 
@@ -216,7 +239,7 @@ parseConstructorDeclaration =
 parseVarTyping :: AsteriaParser VarTyping
 parseVarTyping =
   do x <- parseTermVar
-     reservedOp ":"
+     symbol ":"
      a <- parseType
      return $ VarTyping x a
 
@@ -226,7 +249,7 @@ parseVarTyping =
 parseMethodDeclaration :: AsteriaParser MethodDeclaration
 parseMethodDeclaration =
   do x <- parseTermVar
-     reservedOp ":"
+     symbol ":"
      a <- parseType
      return $ MethodDeclaration x a
 
@@ -237,7 +260,7 @@ parseMethodEquation :: AsteriaParser MethodEquation
 parseMethodEquation =
   do x <- parseTermVar
      pats <- many parseEquationArg
-     reservedOp "="
+     symbol "="
      n <- parseTerm
      return $ MethodEquation x pats n
   where
@@ -246,8 +269,3 @@ parseMethodEquation =
           parseVariablePattern
       <|> parseConstructorPatternNoArguments
       <|> parens parsePattern
-{-
--- MethodEquation MetEq ::=  x Pat* | M? = N  (Method Equation)
-data MethodEquation = MethodEquation TermVar [Pattern] (Maybe Term) Term
-  deriving (Show,Eq)
--}

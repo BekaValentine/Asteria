@@ -1,7 +1,8 @@
 module Parser.Kind where
 
 import Control.Applicative
-import Text.Parsec.Combinator
+import Control.Monad.Combinators.Expr
+import Text.Megaparsec
 
 import Parser.Common
 import Syntax.Kind
@@ -11,16 +12,14 @@ import Syntax.Kind
 -- Kind K, J ::=  Type    (Type Kind)
 --             |  K -> J  (Function Kind)
 parseKind :: AsteriaParser Kind
-parseKind = parseFunctionKind
+parseKind = parseKindExpr
   where
 
-    parseFunctionKind :: AsteriaParser Kind
-    parseFunctionKind =
-      chainr1 parseNonFunctionKind (reservedOp "->" >> pure FunK)
+    parseKindExpr = makeExprParser parseKindTerm kindOperators <?> "kind"
 
-    parseNonFunctionKind :: AsteriaParser Kind
-    parseNonFunctionKind =
-      parseTypeKind <|> parens parseKind
+    parseKindTerm = parens parseKindExpr <|> parseTypeKind
+
+    kindOperators = [[ InfixL  (FunK <$ symbol "->") ]]
 
     parseTypeKind :: AsteriaParser Kind
     parseTypeKind =

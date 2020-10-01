@@ -2,8 +2,7 @@ module Parser.Names where
 
 import Control.Monad
 import Data.Char
-import Text.Parsec
-import qualified Text.Parsec.Token as Token
+import Text.Megaparsec
 
 import Parser.Common
 import Syntax.Names
@@ -30,12 +29,12 @@ parseModuleName = ModuleName <$> parseIdentName
 
 parseModulePath :: AsteriaParser ModulePath
 parseModulePath =
-  ModulePath <$> sepBy1 parseModulePathPart (string ".")
+  ModulePath <$> sepBy1 parseModulePathPart (symbol ".")
   where
     parseModulePathPart :: AsteriaParser ModuleName
     parseModulePathPart =
-      do c <-  Token.identStart languageDef
-         cs <- many (Token.identLetter languageDef)
+      do c <-  identStart
+         cs <- many identLetter
          return $ ModuleName (IdentName (c:cs))
 
 parseTypeVar :: AsteriaParser TypeVar

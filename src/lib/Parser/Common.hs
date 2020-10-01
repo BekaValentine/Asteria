@@ -1,22 +1,103 @@
 module Parser.Common where
 
 import Control.Monad.Identity
-import Text.Parsec
-import Text.Parsec.Indent
-import qualified Text.Parsec.Token as Token
+import Data.Text
+import Data.Void
+import Text.Megaparsec
+import Text.Megaparsec.Char
+import qualified Text.Megaparsec.Char.Lexer as L
 
 
 
 
 
 
-type AsteriaParser a = IndentParser String () a
+type AsteriaParser = Parsec Void String
+type AsteriaParseErrors = ParseErrorBundle String Void
 
-runAsteriaParser :: AsteriaParser a -> String -> Either ParseError a
-runAsteriaParser p = runIndentParser (p <* eof) () "(no source)"
+runAsteriaParser :: AsteriaParser a -> String -> Either AsteriaParseErrors a
+runAsteriaParser p = parse (p <* eof) "(no source)"
+
+spaceConsumer :: AsteriaParser ()
+spaceConsumer = L.space
+  (void (some (char ' ' <|> char '\t')))
+  (L.skipLineComment "--")
+  (L.skipBlockCommentNested "{-" "-}")
+
+newlineSpaceConsumer :: AsteriaParser ()
+newlineSpaceConsumer = L.space
+  space1
+  (L.skipLineComment "--")
+  (L.skipBlockCommentNested "{-" "-}")
 
 
+symbol :: String -> AsteriaParser String
+symbol    = L.symbol spaceConsumer
 
+parens    = between (symbol "(") (symbol ")")
+braces    = between (symbol "{") (symbol "}")
+angles    = between (symbol "<") (symbol ">")
+brackets  = between (symbol "[") (symbol "]")
+semicolon = symbol ";"
+comma     = symbol ","
+colon     = symbol ":"
+dot       = symbol "."
+
+identStart :: AsteriaParser Char
+identStart = letterChar <|> char '_'
+
+identLetter :: AsteriaParser Char
+identLetter = alphaNumChar <|> char '_'
+
+identifier :: AsteriaParser String
+identifier = L.lexeme spaceConsumer content
+  where
+    content =
+      do c <- identStart
+         cs <- many identLetter
+         guard (not ((c:cs) `elem` reservedNames))
+         return (c:cs)
+
+braceBlock :: String -> AsteriaParser a -> AsteriaParser [a]
+braceBlock sep p = braces (sepBy p (symbol sep))
+
+{-
+indentedBlock :: AsteriaParser a -> AsteriaParser [a]
+indentedBlock p = L.indentBlock newlineSpaceConsumer (return (L.IndentSome Nothing return p))
+
+topLevel :: AsteriaParser a -> AsteriaParser a
+topLevel = L.nonIndented newlineSpaceConsumer
+-}
+
+reservedNames = [
+    -- multiple
+    "where"
+
+    -- modules
+  , "module"
+  , "import"
+  , "as"
+  , "using"
+  , "hiding"
+  , "to"
+
+    -- declarations
+  , "data"
+  , "type"
+  , "class"
+
+    -- terms
+  , "case"
+  , "of"
+  , "let"
+  , "define"
+  , "in"
+
+    -- types
+  , "forall"
+  ]
+
+{-}
 languageDef :: Token.GenLanguageDef String () (IndentT Identity)
 languageDef = Token.LanguageDef
                 { Token.commentStart = "{-"
@@ -91,3 +172,5 @@ symbol = Token.symbol tokenParser
 
 whiteSpace :: AsteriaParser ()
 whiteSpace = Token.whiteSpace tokenParser
+
+-}

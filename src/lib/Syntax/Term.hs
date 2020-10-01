@@ -16,7 +16,6 @@ import Syntax.Type
 --             |  M {A}               (Type Instantiation)
 --             |  case M* of Cls*     (Case)
 --             |  let LDecl+ in M     (Let)
---             |  define LDecl+ in M  (Define)
 data Term = Ann Term Type
           | Var TermVar
           | Name TermName
@@ -26,7 +25,6 @@ data Term = Ann Term Type
           | Inst Term Type
           | Case [Term] [CaseClause]
           | Let [LocalDecl] Term
-          | Def [LocalDecl] Term
   deriving (Show,Eq)
 
 

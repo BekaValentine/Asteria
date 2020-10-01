@@ -1,8 +1,7 @@
 module Parser.Term where
 
 import Data.List
-import Text.Parsec
-import Text.Parsec.Indent
+import Text.Megaparsec
 
 import Parser.Common
 import Parser.Names
@@ -24,14 +23,12 @@ import Syntax.Type
 --             |  M {A}               (Type Instantiation)
 --             |  case M* of Cls*     (Case)
 --             |  let LDecl+ in M     (Let)
---             |  define LDecl+ in M  (Define)
 parseTerm :: AsteriaParser Term
 parseTerm =
       parseSuffixed
   <|> parseLambda
   <|> parseCase
   <|> parseLet
-  <|> parseDefine
   <|> parens parseTerm
   where
 
@@ -76,15 +73,15 @@ parseTerm =
 
     parseAnnotation :: AsteriaParser (Term -> Term)
     parseAnnotation =
-      do try $ reservedOp ":"
+      do try $ symbol ":"
          a <- parseType
          return $ \x -> Ann x a
 
     parseLambda :: AsteriaParser Term
     parseLambda =
-      do try $ reservedOp "\\"
-         xs <- many1 parseLambdaParam
-         reservedOp "->"
+      do try $ symbol "\\"
+         xs <- some parseLambdaParam
+         symbol "->"
          m <- parseTerm
          return $ foldr abstract m xs
 
@@ -99,59 +96,33 @@ parseTerm =
 
     parseCase :: AsteriaParser Term
     parseCase =
-      do try $ reserved "case"
-         m <- sepBy1 parseTerm (reservedOp ",")
-         reserved "of"
+      do try $ symbol "case"
+         m <- sepBy1 parseTerm (symbol ",")
+         symbol "of"
          cls <- parseCaseClauses
          return $ Case m cls
 
     parseCaseClauses :: AsteriaParser [CaseClause]
-    parseCaseClauses =
-          parseDelimitedCaseClauses
-      -- <|> parseIndentedCaseClauses
-
-    parseDelimitedCaseClauses :: AsteriaParser [CaseClause]
-    parseDelimitedCaseClauses =
-      braces (sepBy parseCaseClause (reservedOp ";"))
-
-    parseIndentedCaseClauses :: AsteriaParser [CaseClause]
-    parseIndentedCaseClauses = block parseCaseClause
+    parseCaseClauses = braceBlock ";" parseCaseClause
 
     parseLet :: AsteriaParser Term
     parseLet =
-      do try $ reserved "let"
+      do try $ symbol "let"
          decls <- parseLocalDecls
-         reserved "in"
+         symbol "in"
          m <- parseTerm
          return $ Let decls m
 
-    parseDefine :: AsteriaParser Term
-    parseDefine =
-      do try $ reserved "define"
-         decls <- parseLocalDecls
-         reserved "in"
-         m <- parseTerm
-         return $ Def decls m
-
     parseLocalDecls :: AsteriaParser [LocalDecl]
-    parseLocalDecls =
-          parseDelimitedLocalDecls
-      -- <|> parseIndentedLetDecls
-
-    parseDelimitedLocalDecls :: AsteriaParser [LocalDecl]
-    parseDelimitedLocalDecls =
-      braces (sepBy1 parseLocalDecl (reservedOp ";"))
-
-    parseIndentedLocalDecls :: AsteriaParser [LocalDecl]
-    parseIndentedLocalDecls = block parseLocalDecl
+    parseLocalDecls = braceBlock ";" parseLocalDecl
 
 
 
 -- CaseClause Cls ::=  Pat | M* -> N  (Case Clause)
 parseCaseClause :: AsteriaParser CaseClause
 parseCaseClause =
-  do pat <- sepBy1 parsePattern (reservedOp ",")
-     reservedOp "->"
+  do pat <- sepBy1 parsePattern (symbol ",")
+     symbol "->"
      n <- parseTerm
      return $ CaseClause pat n
 
@@ -168,7 +139,7 @@ parseLocalDecl =
 
     parseTypeSig :: AsteriaParser LocalDecl
     parseTypeSig =
-      do x <- try $ parseTermVar <* reservedOp ":"
+      do x <- try $ parseTermVar <* symbol ":"
          a <- parseType
          return $ LocalTermTypeSig x a
 
@@ -177,7 +148,7 @@ parseLocalDecl =
       do (x,pats) <- try $ do
                        x <- parseTermVar
                        pats <- many parseEquationArg
-                       reservedOp "="
+                       symbol "="
                        return (x,pats)
          n <- parseTerm
          return $ LocalTermEquation x pats n

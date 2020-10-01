@@ -8,7 +8,7 @@ import Syntax.Type
 
 
 -- RawModule RMod ::=  module TVK* Imp* where Decl*  (Raw Module)
-data RawModule = RawModule [TyVarKinding] [Import] [Declaration]
+data RawModule = RawModule [Import] [Declaration]
   deriving (Show,Eq)
 
 

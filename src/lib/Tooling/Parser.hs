@@ -1,7 +1,8 @@
 module Tooling.Parser where
 
+import Data.List.NonEmpty
 import Options
-import Text.Parsec.Error (errorMessages, messageString)
+import Text.Megaparsec.Error
 
 import Parser.Common
 import Parser.Module
@@ -24,8 +25,8 @@ main =
        else do src <- readFile file
                let res = runAsteriaParser parseRawModule src
                case res of
-                 Left err -> mapM_ (putStrLn . messageString) (errorMessages err)
-                 Right _ -> do putStrLn ""
+                 Left errb -> putStrLn (errorBundlePretty errb)
+                 Right m -> do putStrLn ""
                                putStrLn "Parsing complete. No errors."
                                putStrLn ""
                                putStrLn "------------------"
@@ -34,3 +35,4 @@ main =
                                putStrLn ""
                                putStrLn "------------------"
                                putStrLn ""
+                               putStrLn (show m)
