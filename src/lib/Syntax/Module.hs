@@ -57,28 +57,35 @@ data DeclaredName = DeclaredIdent IdentName
 
 
 -- Declaration Decl
---   ::=  data Cn TVK* where ConDecl*             (Data Declaration)
---     |  type f TVK* = A                         (Type Synonym Declaration)
---     |  class CCn TVK* <= (CC*) where MetDecl*  (Type Class Declaration)
---     |  x : A                                   (Term Type Signature)
---     |  x Pat* = N                         (Term Equation)
---     |  instance CCn A+ <= (CC*) where MetEq*   (Instance Declaration)
+--   ::=  data Cn (TVK)* where ConDecl*             (Data Declaration)
+--     |  type f (TVK)* = A                         (Type Synonym Declaration)
+--     |  class CCn (TVK)* <= (CC*) where MetDecl*  (Type Class Declaration)
+--     |  x : A                                     (Term Type Signature)
+--     |  x Pat* = N                                (Term Equation)
+--     |  instance CCn A+ <= (CC*) where MetEq*     (Instance Declaration)
 data Declaration
   = DataDecl TypeName [TyVarKinding] [ConstructorDecl]
   | TypeSynonymDecl TypeVar [TyVarKinding] Type
   | ClassDecl ClassName [TyVarKinding] [ClassConstraint] [MethodDeclaration]
   | TermTypeSig TermVar Type
-  | TermEquation TermVar [Pattern] Term
+  | TermEquation TermVar [ArgPattern] Term
   | InstanceDecl ClassName [Type] [ClassConstraint] [MethodEquation]
   deriving (Show,Eq)
 
 
 
--- ConstructorDecl ConDecl ::=  Cn VK* : A  (Constructor Declaration)
-data ConstructorDecl = ConstructorDecl TermName [VarTyping] Type
+-- ConstructorDecl ConDecl ::=  Cn CP* : A  (Constructor Declaration)
+data ConstructorDecl = ConstructorDecl TermName [ConstructorParameter] Type
   deriving (Show,Eq)
 
 
+
+-- ConParam CP ::=  {TVK}   (Implicit Type Parameter)
+--               |  (VT)    (Explicit Term Parameter)
+data ConstructorParameter
+  = ImplicitTypeParameter TyVarKinding
+  | ExplicitTermParameter VarTyping
+  deriving (Show,Eq)
 
 -- VarTyping VT ::=  x : A  (Variable Typing)
 data VarTyping = VarTyping TermVar Type
@@ -93,5 +100,5 @@ data MethodDeclaration = MethodDeclaration TermVar Type
 
 
 -- MethodEquation MetEq ::=  x Pat* = N  (Method Equation)
-data MethodEquation = MethodEquation TermVar [Pattern] Term
+data MethodEquation = MethodEquation TermVar [ArgPattern] Term
   deriving (Show,Eq)

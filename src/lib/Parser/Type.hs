@@ -9,12 +9,12 @@ import Syntax.Type
 
 
 
--- Type A, B ::=  a              (Type Variable)
---             |  Cn             (Type Name)
---             |  A -> B         (Function Type)
---             |  CC => A        (Constrained Type)
---             |  forall TVK. B  (Forall Type)
---             |  A B            (Type Application)
+-- Type A, B ::=  a                 (Type Variable)
+--             |  Cn                (Type Name)
+--             |  A -> B            (Function Type)
+--             |  CC => A           (Constrained Type)
+--             |  forall {TVK}+. B  (Forall Type)
+--             |  A B               (Type Application)
 parseType :: AsteriaParser Type
 parseType = parseTypeExpr
   where
@@ -48,7 +48,7 @@ parseType = parseTypeExpr
     parseForallType :: AsteriaParser Type
     parseForallType =
       do try $ symbol "forall"
-         as <- some parseTyVarKinding
+         as <- some (braces parseTyVarKinding)
          symbol "."
          b <- parseType
          return $ foldr ForallT b as
@@ -79,11 +79,10 @@ parseClassConstraint =
 
 
 
--- TyVarKinding TVK ::=  (a : K)  (Type Variable Kinding)
+-- TyVarKinding TVK ::=  a : K  (Type Variable Kinding)
 parseTyVarKinding :: AsteriaParser TyVarKinding
-parseTyVarKinding =
-  parens $ do
-    a <- parseTypeVar
-    symbol ":"
-    k <- parseKind
-    return $ TyVarKinding a k
+parseTyVarKinding = do
+  a <- parseTypeVar
+  symbol ":"
+  k <- parseKind
+  return $ TyVarKinding a k

@@ -29,7 +29,7 @@ parseConstructorPatternNoArguments =
   ConPat <$> parseTermName <*> return []
 
 -- ArgPattern APat ::=  Pat     (Normal Pattern Argument)
---                   | {TyVar}  (Type Instantiation Argument)
+--                   |  {TyVar}  (Type Instantiation Argument)
 parseArgPattern :: AsteriaParser ArgPattern
 parseArgPattern =
       parseInstPattern
@@ -41,4 +41,9 @@ parseInstPattern =
 
 parseNormalPattern :: AsteriaParser ArgPattern
 parseNormalPattern =
-  NormalPat <$> parsePattern
+  NormalPat <$> parseArgNormalPattern
+  where
+    parseArgNormalPattern =
+          parseVariablePattern
+      <|> parseConstructorPatternNoArguments
+      <|> parens parsePattern

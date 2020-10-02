@@ -1,23 +1,42 @@
-module
-
-  import Foo
-
-where
+import Foo;
+import Bar.Baz;
+import Quux as Doo using (foo, bar, baz) renaming (bar to barr);
+import Garply hiding (quux);
 
 class Monoid (a : Type) where
-  mzero : a
-  mplus : a -> a -> a
+  mzero : a;
+  mplus : a -> a -> a;
+end
 
 data Nat where
-  Zero : Nat
-  Suc (n : Nat) : Nat
+  Zero : Nat;
+  Suc {a : Type} (n : Nat) : Nat;
+end
 
-type natural = Nat
+type natural = Nat;
 
-add : Nat -> Nat -> Nat
-add Zero    n = n
-add (Suc m) n = Suc (add m n)
+add : Nat -> Nat -> Nat;
+add Zero    n = n;
+add (Suc m) n = Suc (add m n);
 
 instance Monoid Nat <= (Foo x) where
-  mzero = Zero
-  mplus x y = add x y
+  mzero = Zero;
+  mplus x y = add x y;
+end
+
+id : forall {a : Type}. a -> a;
+id {a} x = x;
+
+data List (a : Type) where
+  Nil : List a;
+  Cons (x : a) (xs : List a) : List a;
+end
+
+data FList (f : Type -> Type) (a : Type) where
+  FNil : FList f a;
+  FCons (x : a) (xs : f (FList f a)) : FList f a;
+end
+
+
+data Ex (f : Type -> Type) where
+  Wrap {a : Type} (x : f a) : Ex f

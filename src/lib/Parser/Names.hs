@@ -29,7 +29,7 @@ parseModuleName = ModuleName <$> parseIdentName
 
 parseModulePath :: AsteriaParser ModulePath
 parseModulePath =
-  ModulePath <$> sepBy1 parseModulePathPart (symbol ".")
+  ModulePath <$> lexeme (sepBy1 parseModulePathPart (symbol "."))
   where
     parseModulePathPart :: AsteriaParser ModuleName
     parseModulePathPart =

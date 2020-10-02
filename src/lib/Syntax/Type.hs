@@ -5,12 +5,12 @@ import Syntax.Names
 
 
 
--- Type A, B ::=  a              (Type Variable)
---             |  Cn             (Type Name)
---             |  A -> B         (Function Type)
---             |  CC => A        (Constrained Type)
---             |  forall TVK. B  (Forall Type)
---             |  A B            (Type Application)
+-- Type A, B ::=  a                 (Type Variable)
+--             |  Cn                (Type Name)
+--             |  A -> B            (Function Type)
+--             |  CC => A           (Constrained Type)
+--             |  forall {TVK}+. B  (Forall Type)
+--             |  A B               (Type Application)
 data Type = VarT TypeVar
           | NameT TypeName
           | FunT Type Type
@@ -26,6 +26,6 @@ data ClassConstraint = ClassConstraint ClassName [TypeVar]
   deriving (Show,Eq)
 
 
--- TyVarKinding TVK ::=  (a : K)  (Type Variable Kinding)
+-- TyVarKinding TVK ::=  a : K  (Type Variable Kinding)
 data TyVarKinding = TyVarKinding TypeVar Kind
   deriving (Show,Eq)

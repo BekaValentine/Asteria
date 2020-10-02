@@ -1,7 +1,6 @@
 module Parser.Module where
 
 import Text.Megaparsec
-import qualified Text.Megaparsec.Char.Lexer as L
 import Control.Monad.Combinators
 
 import Parser.Common
@@ -15,30 +14,25 @@ import Syntax.Type
 
 
 
--- RawModule RMod ::=  module TVK* Imp* where Decl*  (Raw Module)
+-- RawModule RMod ::=  module Imp* where Decl*  (Raw Module)
 parseRawModule :: AsteriaParser RawModule
 parseRawModule =
-  do symbol "module"
-     newlineSpaceConsumer
-     imps <- many parseImport
-     newlineSpaceConsumer
-     symbol "where"
+  do imps <- many parseImport
      decls <- many parseDeclaration
      return $ RawModule imps decls
 
 
 
--- Import Imp ::=  import MName ImpAs? UH? Rens?
+-- Import Imp ::=  import MName ImpAs? UH? Rens?;
 parseImport :: AsteriaParser Import
-parseImport = try $ L.nonIndented newlineSpaceConsumer $ L.indentBlock newlineSpaceConsumer p
-  where
-    p = do
-      try $ symbol "import"
-      mp <- parseModulePath
-      impAs <- parseImportAs
-      usingHiding <- parseUsingHiding
-      rens <- parseRenamings
-      return $ L.IndentNone (Import mp impAs usingHiding rens)
+parseImport = do
+  try $ symbol "import"
+  mp <- parseModulePath
+  impAs <- parseImportAs
+  usingHiding <- parseUsingHiding
+  rens <- parseRenamings
+  symbol ";"
+  return $ Import mp impAs usingHiding rens
 
 
 
@@ -54,13 +48,13 @@ parseImportAs =
 
 
 -- UsingHiding UH ::=  0             (No Using Hiding)
---                  |  using (DN*)   (Using)
---                  |  hiding (DN*)  (Hiding)
+--                  |  using (DN+,)   (Using)
+--                  |  hiding (DN+,)  (Hiding)
 parseUsingHiding :: AsteriaParser UsingHiding
 parseUsingHiding =
   do muh <- optional
-              ((symbol "using" >> (UsingOnly <$> parens (some parseDeclaredName)))
-                <|> (symbol "hiding" >> (HidingOnly <$> parens (some parseDeclaredName))))
+              ((symbol "using" >> (UsingOnly <$> parens (sepBy1 parseDeclaredName comma)))
+                <|> (symbol "hiding" >> (HidingOnly <$> parens (sepBy1 parseDeclaredName comma))))
      case muh of
        Nothing -> return UsingAll
        Just uh -> return uh
@@ -75,12 +69,12 @@ parseDeclaredName =
 
 
 
--- Renamings Rens ::=  renaming (Ren+)  (Renamings)
+-- Renamings Rens ::=  renaming (Ren+,)  (Renamings)
 parseRenamings :: AsteriaParser [Renaming]
 parseRenamings =
   do mrens <- optional $ do
                 symbol "renaming"
-                parens (sepBy parseRenaming (symbol ";"))
+                parens (sepBy1 parseRenaming comma)
      case mrens of
        Nothing -> return []
        Just rens -> return  rens
@@ -112,12 +106,12 @@ parseRenaming =
 
 
 -- Declaration Decl
---   ::=  data Cn TVK* where ConDecl*             (Data Declaration)
---     |  type f TVK* = A                         (Type Synonym Declaration)
---     |  class CCn TVK* <= (CC*) where MetDecl*  (Type Class Declaration)
---     |  x : A                                   (Term Type Signature)
---     |  x Pat* | M? = N                         (Term Equation)
---     |  instance CCn A+ <= (CC*) where MetEq*   (Instance Declaration)
+--   ::=  data Cn (TVK)* where ConDecl* end             (Data Declaration)
+--     |  type f (TVK)* = A;                            (Type Synonym Declaration)
+--     |  class CCn (TVK)* <= (CC*) where MetDecl* end  (Type Class Declaration)
+--     |  x : A;                                        (Term Type Signature)
+--     |  x Pat* | M? = N;                              (Term Equation)
+--     |  instance CCn A+ <= (CC*) where MetEq* end     (Instance Declaration)
 parseDeclaration :: AsteriaParser Declaration
 parseDeclaration =
       parseDataDeclaration
@@ -132,89 +126,77 @@ parseDeclaration =
     parseDataDeclaration = parseIndentDataDeclaration
 
     parseIndentDataDeclaration :: AsteriaParser Declaration
-    parseIndentDataDeclaration = try $ L.nonIndented newlineSpaceConsumer $ L.indentBlock newlineSpaceConsumer p
-      where
-        p = do try $ symbol "data"
-               tn <- parseTypeName
-               tvk <- many parseTyVarKinding
-               symbol "where"
-               return (L.IndentMany
-                        Nothing
-                        (return . DataDecl tn tvk)
-                        parseConstructorDeclaration)
+    parseIndentDataDeclaration = do
+      try $ symbol "data"
+      tn <- parseTypeName
+      tvk <- many (parens parseTyVarKinding)
+      symbol "where"
+      decls <- many parseConstructorDeclaration
+      symbol "end"
+      return $ DataDecl tn tvk decls
 
     parseTypeSynonymDeclaration :: AsteriaParser Declaration
-    parseTypeSynonymDeclaration = try $ L.nonIndented newlineSpaceConsumer $ L.indentBlock newlineSpaceConsumer p
-      where
-        p = do try $ symbol "type"
-               f <- parseTypeVar
-               tvks <- many parseTyVarKinding
-               symbol "="
-               a <- parseType
-               return (L.IndentNone (TypeSynonymDecl f tvks a))
+    parseTypeSynonymDeclaration = do
+      try $ symbol "type"
+      f <- parseTypeVar
+      tvks <- many (parens parseTyVarKinding)
+      symbol "="
+      a <- parseType
+      symbol ";"
+      return $ TypeSynonymDecl f tvks a
 
     parseTypeClassDeclaration :: AsteriaParser Declaration
     parseTypeClassDeclaration = parseIndentTypeClassDeclaration
 
     parseIndentTypeClassDeclaration :: AsteriaParser Declaration
-    parseIndentTypeClassDeclaration = try $ L.nonIndented newlineSpaceConsumer $ L.indentBlock newlineSpaceConsumer p
-      where
-        p = do try $ symbol "class"
-               cn <- parseClassName
-               tvks <- many parseTyVarKinding
-               cons <- optional $ do
-                         symbol "<="
-                         parens $ some parseClassConstraint
-               symbol "where"
-               return (L.IndentMany
-                        Nothing
-                        (return . ClassDecl cn tvks (maybe [] id cons))
-                        parseMethodDeclaration)
+    parseIndentTypeClassDeclaration = do
+      try $ symbol "class"
+      cn <- parseClassName
+      tvks <- many (parens parseTyVarKinding)
+      cons <- optional $ do
+                symbol "<="
+                parens $ some parseClassConstraint
+      symbol "where"
+      decls <- many parseMethodDeclaration
+      symbol "end"
+      return $ ClassDecl cn tvks (maybe [] id cons) decls
 
     parseTermTypeSignatureDeclaration :: AsteriaParser Declaration
-    parseTermTypeSignatureDeclaration = try $ L.nonIndented newlineSpaceConsumer $ L.indentBlock newlineSpaceConsumer p
-      where
-        p = do x <- try $ do
-                 x <- parseTermVar
-                 symbol ":"
-                 return x
-               a <- parseType
-               return (L.IndentNone (TermTypeSig x a))
+    parseTermTypeSignatureDeclaration = do
+      x <- try $ do
+        x <- parseTermVar
+        symbol ":"
+        return x
+      a <- parseType
+      symbol ";"
+      return $ TermTypeSig x a
 
     parseTermEquationDeclaration :: AsteriaParser Declaration
-    parseTermEquationDeclaration = try $ L.nonIndented newlineSpaceConsumer $ L.indentBlock newlineSpaceConsumer p
-      where
-        p = do (x,pats) <- try $ do
-                 x <- parseTermVar
-                 pats <- many parseEquationArg
-                 symbol "="
-                 return (x,pats)
-               n <- parseTerm
-               return (L.IndentNone (TermEquation x pats n))
-
-    parseEquationArg :: AsteriaParser Pattern
-    parseEquationArg =
-          parseVariablePattern
-      <|> parseConstructorPatternNoArguments
-      <|> parens parsePattern
+    parseTermEquationDeclaration = do
+      (x,pats) <- try $ do
+        x <- parseTermVar
+        pats <- many parseArgPattern
+        symbol "="
+        return (x,pats)
+      n <- parseTerm
+      symbol ";"
+      return $ TermEquation x pats n
 
     parseInstanceDeclaration :: AsteriaParser Declaration
     parseInstanceDeclaration = parseIndentInstanceDeclaration
 
     parseIndentInstanceDeclaration :: AsteriaParser Declaration
-    parseIndentInstanceDeclaration = try $ L.nonIndented newlineSpaceConsumer $ L.indentBlock newlineSpaceConsumer p
-      where
-        p = do try $ symbol "instance"
-               cn <- parseClassName <?> "instance class name"
-               tvks <- many parseInstanceArgument
-               cons <- optional $ do
-                         symbol "<="
-                         parens $ some parseClassConstraint
-               symbol "where" <?> "where"
-               return (L.IndentMany
-                        Nothing
-                        (return . InstanceDecl cn tvks (maybe [] id cons))
-                        parseMethodEquation)
+    parseIndentInstanceDeclaration = do
+      try $ symbol "instance"
+      cn <- parseClassName <?> "instance class name"
+      tvks <- many parseInstanceArgument
+      cons <- optional $ do
+                symbol "<="
+                parens $ some parseClassConstraint
+      symbol "where" <?> "where"
+      decls <- many parseMethodEquation
+      symbol "end"
+      return $ InstanceDecl cn tvks (maybe [] id cons) decls
 
     parseInstanceArgument :: AsteriaParser Type
     parseInstanceArgument =
@@ -224,15 +206,30 @@ parseDeclaration =
 
 
 
--- ConstructorDecl ConDecl ::=  Cn VK* : A  (Constructor Declaration)
+-- ConstructorDecl ConDecl ::=  Cn CP* : A;  (Constructor Declaration)
 parseConstructorDeclaration :: AsteriaParser ConstructorDecl
 parseConstructorDeclaration =
   do cn <- parseTermName
-     vks <- many (parens parseVarTyping)
+     vks <- many parseConstructorParameter
      symbol ":"
      a <- parseType
+     symbol ";"
      return $ ConstructorDecl cn vks a
 
+
+
+-- ConParam CP ::=  {TVK}   (Implicit Type Parameter)
+--               |  (VT)    (Explicit Term Parameter)
+parseConstructorParameter :: AsteriaParser ConstructorParameter
+parseConstructorParameter =
+      parseImplicitTypeParameter
+  <|> parseExplicitTermParameter
+
+parseImplicitTypeParameter :: AsteriaParser ConstructorParameter
+parseImplicitTypeParameter = ImplicitTypeParameter <$> braces parseTyVarKinding
+
+parseExplicitTermParameter :: AsteriaParser ConstructorParameter
+parseExplicitTermParameter = ExplicitTermParameter <$> parens parseVarTyping
 
 
 -- VarTyping VT ::=  x : A  (Variable Typing)
@@ -245,27 +242,23 @@ parseVarTyping =
 
 
 
--- MethodDeclaration MetDecl ::=  x : A  (Method Declaration)
+-- MethodDeclaration MetDecl ::=  x : A;  (Method Declaration)
 parseMethodDeclaration :: AsteriaParser MethodDeclaration
 parseMethodDeclaration =
   do x <- parseTermVar
      symbol ":"
      a <- parseType
+     symbol ";"
      return $ MethodDeclaration x a
 
 
 
--- MethodEquation MetEq ::=  x Pat* = N  (Method Equation)
+-- MethodEquation MetEq ::=  x Pat* = N;  (Method Equation)
 parseMethodEquation :: AsteriaParser MethodEquation
 parseMethodEquation =
   do x <- parseTermVar
-     pats <- many parseEquationArg
+     pats <- many parseArgPattern
      symbol "="
      n <- parseTerm
+     symbol ";"
      return $ MethodEquation x pats n
-  where
-    parseEquationArg :: AsteriaParser Pattern
-    parseEquationArg =
-          parseVariablePattern
-      <|> parseConstructorPatternNoArguments
-      <|> parens parsePattern

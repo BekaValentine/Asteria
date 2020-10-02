@@ -32,7 +32,7 @@ newlineSpaceConsumer = L.space
 
 
 symbol :: String -> AsteriaParser String
-symbol    = L.symbol spaceConsumer
+symbol    = L.symbol newlineSpaceConsumer
 
 parens    = between (symbol "(") (symbol ")")
 braces    = between (symbol "{") (symbol "}")
@@ -43,6 +43,9 @@ comma     = symbol ","
 colon     = symbol ":"
 dot       = symbol "."
 
+lexeme :: AsteriaParser a -> AsteriaParser a
+lexeme = L.lexeme newlineSpaceConsumer
+
 identStart :: AsteriaParser Char
 identStart = letterChar <|> char '_'
 
@@ -50,7 +53,7 @@ identLetter :: AsteriaParser Char
 identLetter = alphaNumChar <|> char '_'
 
 identifier :: AsteriaParser String
-identifier = L.lexeme spaceConsumer content
+identifier = lexeme content
   where
     content =
       do c <- identStart
@@ -72,6 +75,7 @@ topLevel = L.nonIndented newlineSpaceConsumer
 reservedNames = [
     -- multiple
     "where"
+  , "end"
 
     -- modules
   , "module"
