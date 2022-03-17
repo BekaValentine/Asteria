@@ -1,12 +1,5 @@
 module Demo importing
-
   Foo
-  Foo as Bar
-  Foo unqualified
-  Bar unqualified using (a, b, c)
-  Bar unqualified hiding (a, b, c)
-  Bar renaming (d to d2)
-
 where
 
 data Foo (a : Type) where

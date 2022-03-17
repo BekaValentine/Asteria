@@ -1,6 +1,13 @@
-module
+module demo
 
-  import Foo
+import
+
+  Foo,
+  Foo as Bar,
+  Foo unqualified,
+  Bar unqualified using (a, b, c),
+  Bar unqualified hiding (a, b, c),
+  Bar renaming (d to d2)
 
 where
 
@@ -17,6 +24,10 @@ type natural = Nat
 add : Nat -> Nat -> Nat
 add Zero    n = n
 add (Suc m) n = Suc (add m n)
+
+(+) : Nat -> Nat -> Nat
+Zero    + n = n
+(Suc m) + n = Suc (m + n)
 
 instance Monoid Nat <= (Foo x) where
   mzero = Zero

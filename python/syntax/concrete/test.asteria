@@ -1,0 +1,67 @@
+module Demo importing
+  | Foo
+  | Bar renaming (a to (==))
+  | Baz unqualified using (c)
+  | Quux unqualified hiding (d)
+where
+
+data Foo (a : Type) where
+  | MkFoo : Foo a
+  ;;
+
+data Exists (f : Type -> Type) where
+  | Witness {a : Type} (x : a) (pf : f a) : Exists f
+  ;;
+
+type foo (a : Type) = Foo a;;
+
+class forall (a : Type) (b : Type). (Foo a, Bar b) => Baz a b where
+  | foo : a -> b
+  | bar : a
+  | baz : b
+  ;;
+
+x : Foo a b;;
+
+x = foo x y;;
+
+instance forall (a : Type) (b : Type). (Foo a, Bar b) => Baz a b where
+  | foo = x
+  | bar = y
+  | baz = z
+  ;;
+
+x = case y of
+  | Foo y | x -> z
+  ;;
+
+map : forall (a : Type) (b : Type). (a -> b) -> List a -> List a;;
+map f xs | isNil xs = Nil;;
+
+infixl 5 == + *
+
+x = y == z == w == q;;
+
+x = (==) y z;;
+
+x = (y ==) z;;
+
+x = (== z) y;;
+
+x = x + (+ y) y;;
+
+if : forall (a : Type). Bool -> (Unit -> a) -> (Unit -> a) -> a;;
+if test f g = case test of
+  | True -> f MkUnit
+  | False -> g MkUnit
+  ;;
+
+
+
+map : forall (a b : Type). (a -> b) -> List a -> List b;;
+map = \{a} {b} f xs ->
+        case xs of
+          | Nil -> Nil
+          | Cons x xs -> Cons (f x) (map f xs);;
+
+x = (case foo of | x -> a | y -> b) z w;;

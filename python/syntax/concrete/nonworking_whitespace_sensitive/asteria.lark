@@ -1,0 +1,392 @@
+%declare _INDENT _DEDENT _SAMEDENT
+%import common.WS_INLINE
+%ignore WS_INLINE
+_NEWLINE: /(\r?\n[\t ]*)+/
+_sepby{x, sep}: x (sep x)*
+_sepby0{x, sep}: [x (sep x)*]
+
+////////////////  Keywords and Symbols  ////////////////
+
+_WHERE:        "where"
+_MODULE:       "module"
+_IMPORTING:    "importing"
+_UNQUALIFIED:  "unqualified"
+_AS:           "as"
+_USING:        "using"
+_HIDING:       "hiding"
+_RENAMING:     "renaming"
+_TO:           "to"
+_DATA:         "data"
+_TYPE:         "type"
+_CLASS:        "class"
+_INSTANCE:     "instance"
+_CASE:         "case"
+_OF:           "of"
+_LET:          "let"
+_IN:           "in"
+_FORALL:       "forall"
+_TYPEKIND:     "Type"
+
+_EQ:         "="
+_BIG_ARROW:  "=>"
+_COLON:      ":"
+_ARROW:      "->"
+_LAMBDA:     "\\"
+_AT:         "@"
+_DOT:        "."
+_COMMA:      ","
+_PIPE:       "|"
+_LPAR:       "("
+_RPAR:       ")"
+_LBRACE:     "{"
+_RBRACE:     "}"
+_LBRACK:     "["
+_RBRACK:     "]"
+
+
+
+
+
+
+////////////////  Names and Operators  ////////////////
+
+VARNAME: /(?!(_|where|module|import|unqualified|as|using|hiding|to|data|type|class|instance|case|of|let|in|forall)\b)[a-z_][a-zA-Z0-9_]*/
+CONNAME: /(?!(Type)\b)[A-Z][a-zA-Z0-9_]*/
+_name: VARNAME | CONNAME
+OPERATOR: /(?!(=|=>|:|->|\\|@|\.|,|\|)\b)[~!@#$%^&*\\\-|+=:<>?\/.]+/
+
+
+
+
+
+
+////////////////  Modules  ////////////////
+
+
+module: _NEWLINE? _MODULE CONNAME imports _WHERE _INDENT declarations _SAMEDENT?
+
+imports: [_IMPORTING _INDENT _sepby{import, _SAMEDENT} _DEDENT]
+
+import: import_sort import_renaming
+
+?import_sort: qualified_import
+            | unqualified_import
+            | as_import
+
+qualified_import: CONNAME
+unqualified_import: CONNAME _UNQUALIFIED using_hiding
+as_import: CONNAME _AS CONNAME
+
+using_hiding: (import_using | import_hiding)?
+
+import_using: _USING _LPAR _sepby{_name, _COMMA} _RPAR
+import_hiding: _HIDING _LPAR _sepby{_name, _COMMA} _RPAR
+
+import_renaming: (_RENAMING _LPAR renaming_clause (_COMMA renaming_clause)* _RPAR)?
+
+?renaming_clause: varname_renaming
+                | conname_renaming
+
+varname_renaming: VARNAME _TO VARNAME
+conname_renaming: CONNAME _TO CONNAME
+
+
+
+
+
+
+////////////////  Declarations  ////////////////
+
+declarations: _sepby0{declaration, _SAMEDENT}
+
+//-- Declaration Decl
+//--   ::=  data Cn TVK* where ConDecl*             (Data Declaration)
+//--     |  type f TVK* = A                         (Type Synonym Declaration)
+//--     |  class CCn TVK* <= (CC*) where MetDecl*  (Type Class Declaration)
+//--     |  x : A                                   (Term Type Signature)
+//--     |  x Pat* | M? = N                         (Term Equation)
+//--     |  instance CCn A+ <= (CC*) where MetEq*   (Instance Declaration)
+
+?declaration: data_declaration
+            | type_synonym_declaration
+            | type_class_declaration
+            | type_signature
+            | term_equation
+            | instance_declaration
+
+tyvarkindings: tyvarkinding*
+mandatory_tyvarkindings: tyvarkinding+
+tyvarkinding: _LPAR VARNAME _COLON kind _RPAR
+
+implicit_tyvarkindings: implicit_tyvarkinding*
+implicit_tyvarkinding: _LBRACE VARNAME _COLON kind _RBRACE
+
+vartypings: vartyping*
+vartyping: _LPAR VARNAME _COLON type _RPAR
+
+
+
+
+
+
+////////////////  Data Declarations  ////////////////
+
+data_declaration: _DATA CONNAME tyvarkindings _WHERE _INDENT data_body _DEDENT
+
+
+// ConstructorDecl ConDecl ::=  Cn TVK* VT* : A  (Constructor Declaration)
+
+data_body: _sepby0{constructor_declaration, _SAMEDENT}
+
+constructor_declaration: CONNAME implicit_tyvarkindings vartypings _COLON type
+
+
+
+
+
+
+//////////////// Type Synonym Declarations  ////////////////
+
+type_synonym_declaration: _TYPE VARNAME tyvarkindings _EQ type
+
+
+
+
+
+
+//////////////// Type Class Declarations  ////////////////
+
+type_class_declaration: _CLASS class_quantification class_precondition CONNAME class_params _WHERE _INDENT class_body _DEDENT
+
+class_quantification: (_FORALL mandatory_tyvarkindings _DOT)
+
+class_precondition: (_LPAR _sepby{class_constraint,_COMMA} _RPAR _BIG_ARROW)?
+
+class_params: VARNAME*
+
+class_body: _sepby0{method_declaration, _SAMEDENT}
+
+// MethodDeclaration MetDecl ::=  x : A  (Method Declaration)
+method_declaration: VARNAME _COLON type
+
+
+
+
+
+////////////////  Type Signature  ////////////////
+
+type_signature: VARNAME _COLON type
+
+
+
+
+
+
+////////////////  Term Equation  ////////////////
+
+term_equation: VARNAME equation_arg_patterns guard _EQ term
+
+guard: [_PIPE term]
+
+
+
+
+
+
+////////////////  Instance Declaration  ////////////////
+
+instance_declaration: _INSTANCE class_quantification class_precondition CONNAME type* _WHERE _INDENT instance_body _DEDENT
+
+instance_body: _sepby{method_equation, _SAMEDENT}
+
+// MethodEquation MetEq ::=  x Pat* = N  (Method Equation)
+method_equation: VARNAME equation_arg_patterns _EQ term
+
+
+
+
+
+
+////////////////  Kinds  ////////////////
+
+?kind: type_kind
+     | arrow_kind
+     | paren_kind
+
+type_kind: _TYPEKIND
+
+arrow_kind: _arrow_kind_left _ARROW kind
+_arrow_kind_left: type_kind
+                | paren_kind
+
+?paren_kind: _LPAR kind _RPAR
+
+
+
+
+
+
+////////////////  Types  ////////////////
+
+//-- Type A, B ::=  a              (Type Variable)
+//--             |  Cn             (Type Name)
+//--             |  A -> B         (Function Type)
+//--             |  CC => A        (Constrained Type)
+//--             |  forall TVK. B  (Forall Type)
+//--             |  A B            (Type Application)
+
+?type: type_variable
+     | type_name
+     | function_type
+     | constrained_type
+     | forall_type
+     | type_application
+     | paren_type
+
+type_variable: VARNAME
+
+type_name: CONNAME
+
+function_type: _function_type_left _ARROW type
+_function_type_left: type_variable
+                   | type_name
+                   | type_application
+                   | paren_type
+
+constrained_type: _LPAR _sepby{class_constraint,_COMMA} _RPAR _BIG_ARROW type
+
+forall_type: _FORALL mandatory_tyvarkindings _DOT type
+
+type_application: _type_application_left _type_application_right
+_type_application_left: type_variable
+                      | type_name
+                      | type_application
+                      | paren_type
+_type_application_right: type_variable
+                       | type_name
+                       | paren_type
+
+paren_type: _LPAR type _RPAR
+
+
+
+
+
+
+//////////////// Class Constraints ////////////////
+
+class_constraint: CONNAME constraint_args
+
+constraint_args: type*
+
+
+
+
+
+
+////////////////  Patterns  ////////////////
+
+?pattern: variable_pattern
+        | constructor_pattern
+        | paren_pattern
+
+variable_pattern: VARNAME
+
+constructor_pattern: CONNAME argument_patterns
+
+paren_pattern: _LPAR pattern _RPAR
+
+argument_patterns: argument_pattern*
+
+?argument_pattern: variable_pattern
+                 | no_arg_constructor_pattern -> pattern
+                 | paren_pattern
+
+no_arg_constructor_pattern: CONNAME
+
+equation_arg_patterns: equation_arg_pattern*
+
+?equation_arg_pattern: argument_pattern
+                     | type_variable_binding
+
+type_variable_binding: _LBRACE VARNAME _RBRACE
+
+
+
+
+
+
+////////////////  Terms  ////////////////
+
+//-- Term M, N ::=  M : A               (Type Annotation)
+//--             |  x                   (Variable)
+//--             |  Cn                  (Constructor)
+//--             |  \x -> M             (Lambda Abstraction)
+//--             |  M N                 (Function Application)
+//--             |  \{a} -> M           (Type Abstraction)
+//--             |  M {A}               (Type Instantiation)
+//--             |  case M* of Cls*     (Case)
+//--             |  let LDecl+ in M     (Let)
+
+?term: type_annotation
+     | variable
+     | constructor
+     | lambda
+     | application
+     | case
+     | let
+     | paren_term
+
+type_annotation: _annotation_left _COLON type
+_annotation_left: variable
+                | constructor
+                | application
+                | paren_term
+
+variable: VARNAME
+
+constructor: CONNAME
+
+lambda: _LAMBDA formal_parameters _ARROW term
+
+formal_parameters: formal_parameter+
+
+formal_parameter: variable_parameter
+                | type_variable_parameter
+
+variable_parameter: VARNAME
+
+type_variable_parameter: _LBRACE VARNAME _RBRACE
+
+application: _application_left _application_right
+_application_left: variable
+                 | constructor
+                 | application
+                 | paren_term
+_application_right: variable
+                  | constructor
+                  | paren_term
+                  | type_instantiation
+
+type_instantiation: _LBRACE type _RBRACE
+
+case: _CASE _case_scrutinee _OF _INDENT case_body _DEDENT
+_case_scrutinee: variable
+               | constructor
+               | application
+
+case_body: _sepby0{case_clause, _SAMEDENT}
+
+// CaseClause Cls ::=  Pat | M -> N  (Case Clause)
+case_clause: pattern guard _ARROW term
+
+let: _LET _INDENT let_declarations _DEDENT _IN term
+
+let_declarations: _sepby{let_declaration, _SAMEDENT}
+
+// LetDec LDecl ::=  x : A             (Let Type Signature)
+//                |  x Pat* `|` M = N  (Let Term Equation)
+?let_declaration: type_signature
+                | term_equation
+
+paren_term: _LPAR term _RPAR
