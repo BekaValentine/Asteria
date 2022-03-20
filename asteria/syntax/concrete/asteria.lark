@@ -421,12 +421,15 @@ case_clause: _PIPE pattern guard _ARROW term
 
 let: _LET let_declarations _IN term
 
-let_declarations: (_PIPE let_declaration)+
+let_declarations: let_declaration (_PIPE let_declaration)*
 
 // LetDec LDecl ::=  x : A             (Let Type Signature)
 //                |  x Pat* `|` M = N  (Let Term Equation)
-?let_declaration: type_signature
-                | term_equation
+?let_declaration: let_type_signature
+                | let_term_equation
+
+let_type_signature: VARNAME _COLON type
+let_term_equation: VARNAME equation_arg_patterns guard _EQ term
 
 infix: term OPERATOR _infix_right
 _infix_right: variable

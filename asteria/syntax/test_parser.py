@@ -1,8 +1,8 @@
 import lark
 from pathlib import Path
 
-import concrete.parser as parser
-import abstract.ast as ast
+import asteria.syntax.concrete.parser as parser
+import asteria.syntax.abstract as ast
 
 
 if __name__ == '__main__':

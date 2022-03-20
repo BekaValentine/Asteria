@@ -65,3 +65,7 @@ map = \{a} {b} f xs ->
           | Cons x xs -> Cons (f x) (map f xs);;
 
 x = (case foo of | x -> a | y -> b) z w;;
+
+x = let y : Bool
+      | y = True
+    in False;;
