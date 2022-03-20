@@ -8,3 +8,6 @@ dist-newstyle/*
 __pycache__/
 *.py[cod]
 *$py.class
+
+# mypy cache
+.mypy_cache
