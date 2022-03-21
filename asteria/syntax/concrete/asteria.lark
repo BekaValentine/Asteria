@@ -37,6 +37,7 @@ _AT:         "@"
 _DOT:        "."
 _COMMA:      ","
 _PIPE:       "|"
+_DOUBLEPIPE: "||"
 _LPAR:       "("
 _RPAR:       ")"
 _LBRACE:     "{"
@@ -62,6 +63,8 @@ OPERATOR: /(=>|:|->|@|,|\||;;)[~!@#$%^&*\-|+=:;<>?\/\.]+/
         | /[~!#$%^&*+<>?\/\.][~!@#$%^&*\-|+=:;<>?\/\.]*/
 _name: VARNAME | CONNAME | _LPAR OPERATOR _RPAR
 _termname: VARNAME | _LPAR OPERATOR _RPAR
+tyvarnames: VARNAME+
+varnames: VARNAME+
 
 
 
@@ -125,14 +128,6 @@ declarations: declaration*
 tyvarkindings: tyvarkinding*
 mandatory_tyvarkindings: tyvarkinding+
 tyvarkinding: _LPAR tyvarnames _COLON kind _RPAR
-tyvarnames: VARNAME+
-
-implicit_tyvarkindings: implicit_tyvarkinding*
-implicit_tyvarkinding: _LBRACE tyvarnames _COLON kind _RBRACE
-
-vartypings: vartyping*
-vartyping: _LPAR varnames _COLON type _RPAR
-varnames: VARNAME+
 
 
 
@@ -160,7 +155,13 @@ data_declaration: _DATA CONNAME tyvarkindings _WHERE data_body _DOUBLESEMI
 
 data_body: constructor_declaration*
 
-constructor_declaration: _PIPE CONNAME implicit_tyvarkindings vartypings _COLON type
+constructor_declaration: _PIPE CONNAME constructor_type_arguments constructor_arguments _COLON type
+
+constructor_type_arguments: constructor_type_argument*
+constructor_type_argument: _LBRACE tyvarnames _COLON kind _RBRACE
+
+constructor_arguments: constructor_argument*
+constructor_argument: _LPAR varnames _COLON type _RPAR
 
 
 
@@ -208,7 +209,7 @@ type_signature: VARNAME _COLON type _DOUBLESEMI
 
 term_equation: VARNAME equation_arg_patterns guard _EQ term _DOUBLESEMI
 
-guard: [_PIPE term]
+guard: [_DOUBLEPIPE term]
 
 
 
@@ -380,14 +381,18 @@ lambda: _LAMBDA formal_parameters _ARROW term
 
 formal_parameters: formal_parameter+
 
-?formal_parameter: variable_parameter
-                 | vartyping
-                 | type_variable_parameter
-                 | implicit_tyvarkinding
+?formal_parameter: untyped_variable_parameter
+                 | typed_variable_parameter
+                 | unkinded_type_variable_parameter
+                 | kinded_type_variable_parameter
 
-variable_parameter: VARNAME
+untyped_variable_parameter: VARNAME
 
-type_variable_parameter: _LBRACE VARNAME _RBRACE
+typed_variable_parameter: _LPAR varnames _COLON type _RPAR
+
+unkinded_type_variable_parameter: _LBRACE VARNAME _RBRACE
+
+kinded_type_variable_parameter: _LBRACE tyvarnames _COLON kind _RBRACE
 
 application: _application_left _application_right
 _application_left: variable
@@ -405,7 +410,8 @@ _application_right: variable
 
 type_instantiation: _LBRACE type _RBRACE
 
-case: _CASE _case_scrutinee _OF case_body
+case: _CASE case_scrutinees _OF case_body
+case_scrutinees: _case_scrutinee (_PIPE _case_scrutinee)*
 _case_scrutinee: variable
                | constructor
                | application
@@ -416,15 +422,17 @@ _case_scrutinee: variable
 
 case_body: case_clause*
 
-// CaseClause Cls ::=  Pat | M -> N  (Case Clause)
-case_clause: _PIPE pattern guard _ARROW term
+// CaseClause Cls ::=  | Pat* || G -> N  (Case Clause)
+case_clause: _PIPE patterns guard _ARROW term
+
+patterns: pattern (_PIPE pattern)*
 
 let: _LET let_declarations _IN term
 
 let_declarations: let_declaration (_PIPE let_declaration)*
 
 // LetDec LDecl ::=  x : A             (Let Type Signature)
-//                |  x Pat* `|` M = N  (Let Term Equation)
+//                |  x Pat* || M = N   (Let Term Equation)
 ?let_declaration: let_type_signature
                 | let_term_equation
 

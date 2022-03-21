@@ -13,7 +13,7 @@ data Exists (f : Type -> Type) where
   | Witness {a : Type} (x : a) (pf : f a) : Exists f
   ;;
 
-type foo (a : Type) = Foo a;;
+type bar (a : Type) = Foo a;;
 
 class forall (a : Type) (b : Type). (Foo a, Bar b) => Baz a b where
   | foo : a -> b
@@ -36,7 +36,7 @@ x = case y of
   ;;
 
 map : forall (a : Type) (b : Type). (a -> b) -> List a -> List a;;
-map f xs | isNil xs = Nil;;
+map f xs || isNil xs = Nil;;
 
 infixl 5 == + *
 
@@ -69,3 +69,8 @@ x = (case foo of | x -> a | y -> b) z w;;
 x = let y : Bool
       | y = True
     in False;;
+
+x = \a (b : C) {d} {e : Type} -> f;;
+
+x = case x | y | z of
+       | a | b | c || foo -> done;;

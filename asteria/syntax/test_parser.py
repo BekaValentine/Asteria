@@ -2,7 +2,7 @@ import lark
 from pathlib import Path
 
 import asteria.syntax.concrete.parser as parser
-import asteria.syntax.abstract as ast
+import asteria.syntax.abstract.surface as surface
 
 
 if __name__ == '__main__':
@@ -12,4 +12,4 @@ if __name__ == '__main__':
 
     cst = parser.parse(src)
     print(cst.pretty())
-    print(ast.Module.from_cst(cst))
+    print(surface.Module_from_cst(cst))
