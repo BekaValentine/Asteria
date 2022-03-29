@@ -17,19 +17,50 @@ class Kind(Core):
     pass
 
 
+# Type
+# TypeKind()
 @dataclass
 class TypeKind(Kind):
     pass
 
 
+# Type -> Type
+# ArrowKind(TypeKind(), TypeKind())
 @dataclass
 class ArrowKind(Kind):
     argument_kind: Kind
     return_kind: Kind
 
 
+################  Names  ################
+
+# Data.List$List
+# DeclaredTypeConstructorName(["Data","List"], "List")
+@dataclass
+class DeclaredTypeConstructorName(Core):
+    modules: List[str]
+    name: str
+
+# Data.List$List$Cons
+# DeclaredConstructorName(DeclaredTypeName(["Data","List"], "List"), "Cons")
+@dataclass
+class DeclaredConstructorName(Core):
+    type_name: DeclaredTypeName
+    name: str
+
+# Data.List$reverse$reverseOnto
+# DeclaredTermName(["Data", "List"], "reverse", ["reverseOnto"])
+@dataclass
+class DeclaredTermName(Core):
+    modules: List[str]
+    root_name: str
+    sub_names: List[str]
+
 ################  Types  ################
 
+
+# a : Type
+# TyVarkinding("a", TypeKind())
 @dataclass
 class TyVarKinding(Core):
     tyvar: str
@@ -41,35 +72,46 @@ class Type(Core):
     pass
 
 
+# a
+# VariableType("a")
 @dataclass
 class VariableType(Type):
     name: str
 
 
+# Data.Pair$Pair(a;b)
+# ConstructorType("Pair", [VariableType("a"), VariableType("b")])
 @dataclass
-class NameType(Type):
-    modules: List[str]
-    name : str
+class ConstructorType(Type):
+    name: DeclaredTypeConstructorName
     arguments: List[Type]
 
 
+# a -> b
+# FunctionType(VariableType("a"), VariableType("b"))
 @dataclass
 class FunctionType(Type):
     argument_type: Type
     return_type: Type
 
 
+# forall (a : Type). a
+# ForallType(TyVarKinding("a", TypeKind()), VariableType("a"))
 @dataclass
 class ForallType(Type):
     tyvar_kinding: TyVarKinding
     scope: Type
 
 
+# \(a : Type) -> a
+# LambdaType(TyVarKinding("a", TypeKind()), VariableType("a"))
 @dataclass
 class LambdaType(Type):
     tyvar_kinding: TyVarKinding
     body: Type
 
+# f $ a
+# ApplicationType(VariableType("f"), VariableType("a"))
 @dataclass
 class ApplicationType(Type):
     function: Type
@@ -100,45 +142,53 @@ class ConstructorParameter(Core):
     type: Type
 
 
+# constructor Data.Pair$Pair$MkPair {a : Type} {b : Type} (x : a) (y : b) : Data.Pair$Pair(a;b)
 @dataclass
-class ConstructorDeclaration(Core):
-    name: str
+class ConstructorDeclaration(Declaration):
+    name: DeclaredConstructorName
     type_parameters: List[ConstructorTypeParameter]
     parameters: List[ConstructorParameter]
-    return_type: Type
+    return_type_name: DeclaredTypeConstructorName
+    return_type_params: List[Type]
 
 
+# datatype Data.Pair$Pair (a : Type) (b : Type)
 @dataclass
-class DataDeclaration(Declaration):
-    name: str
+class TypeConstructorDeclaration(Declaration):
+    name: DeclaredTypeConstructorName
     tyvar_kindings: List[TyVarKinding]
-    constructor_declarations: List[ConstructorDeclaration]
 
 
 ################  Type Signature  ################
 
+# Data.List$reverse : ...
 @dataclass
 class TypeSignature(Declaration):
-    name: str
+    name: DeclaredTermName
     type: Type
 
 
 
 ################  Patterns  ################
 
+
 @dataclass
 class Pattern(Core):
     pass
 
 
+# x
+# VariablePattern("x")
 @dataclass
 class VariablePattern(Pattern):
     name: str
 
 
+# Cons(x; xs)
+# ConstructorPattern("Cons", [VariablePattern("x", VariablePattern("xs")])
 @dataclass
 class ConstructorPattern(Pattern):
-    constructor: str
+    constructor: DeclaredConstructorName
     arguments: List[Pattern]
 
 
@@ -149,12 +199,16 @@ class Term(Core):
     pass
 
 
+# x : a
+# AnnotationTerm(VariableTerm("x"), VariableType("a"))
 @dataclass
 class TypeAnnotationTerm(Term):
     term: Term
     type: Type
 
 
+# x
+# VariableTerm("x")
 @dataclass
 class VariableTerm(Term):
     name: str
@@ -162,16 +216,19 @@ class VariableTerm(Term):
 
 @dataclass
 class DeclaredTermNameTerm(Term):
-    modules: List[str]
-    name_parts: List[str]
+    name: DeclaredTermName
 
 
+# Pair(x;y)
+# ConstructorTerm("Pair", [VariableTerm("x"), VariableTerm("y")])
 @dataclass
 class ConstructorTerm(Term):
-    constructor: str
+    constructor: DeclaredConstructorName
     arguments: List[Term]
 
 
+# \(x : a) -> x
+# LambdaTerm("x", VariableType("a"), VariableTerm("x"))
 @dataclass
 class LambdaTerm(Term):
     formal_parameter: str
@@ -179,6 +236,8 @@ class LambdaTerm(Term):
     body: Term
 
 
+#\{a : Type} -> x
+# AbstractionTerm("a", TypeKind(), VariableTerm("x"))
 @dataclass
 class AbstractionTerm(Term):
     formal_type_parameter: str
@@ -186,12 +245,16 @@ class AbstractionTerm(Term):
     body: Term
 
 
+# f $ x
+# ApplicationTerm(VariableTerm("f"), VariableTerm("x"))
 @dataclass
 class ApplicationTerm(Term):
     function: Term
     argument: Term
 
 
+# f @ a
+# InstantiationTerm(VariableTerm("f"), VariableType("a"))
 @dataclass
 class InstantiationTerm(Term):
     function: Term
@@ -212,16 +275,17 @@ class CaseClause(Core):
 
 @dataclass
 class CaseTerm(Term):
-    scrutinee: Term
+    scrutinee: List[Term]
     clauses: List[CaseClause]
 
 
 ################  Term Equation  ################
 
 
+# Data.List$reverse$reverseOnto = ...
 @dataclass
 class TermEquation(Declaration):
-    name: str
+    name: DeclaredTermName
     definition: Term
 
 
