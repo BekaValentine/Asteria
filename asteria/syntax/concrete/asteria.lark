@@ -62,7 +62,7 @@ OPERATOR: /(=>|:|->|@|,|\||;;)[~!@#$%^&*\-|+=:;<>?\/\.]+/
         | /;([~!@#$%^&*\-|+=:<>?\/\.][~!@#$%^&*\-|+=:;<>?\/\.]*)?/
         | /[~!#$%^&*+<>?\/\.][~!@#$%^&*\-|+=:;<>?\/\.]*/
 _name: VARNAME | CONNAME | _LPAR OPERATOR _RPAR
-_termname: VARNAME | _LPAR OPERATOR _RPAR
+_varname: VARNAME | _LPAR OPERATOR _RPAR
 tyvarnames: VARNAME+
 varnames: VARNAME+
 
@@ -77,7 +77,7 @@ module: _MODULE CONNAME imports _WHERE declarations _DOUBLESEMI?
 
 imports: [_IMPORTING import+]
 
-import: _PIPE import_sort import_renaming
+import: _PIPE import_sort renaming
 
 ?import_sort: qualified_import
             | unqualified_import
@@ -92,12 +92,12 @@ using_hiding: (import_using | import_hiding)?
 import_using: _USING _LPAR _sepby{_name, _COMMA} _RPAR
 import_hiding: _HIDING _LPAR _sepby{_name, _COMMA} _RPAR
 
-import_renaming: (_RENAMING _LPAR renaming_clause (_COMMA renaming_clause)* _RPAR)?
+renaming: (_RENAMING _LPAR renaming_clause (_COMMA renaming_clause)* _RPAR)?
 
-?renaming_clause: termname_renaming
+?renaming_clause: varname_renaming
                 | conname_renaming
 
-termname_renaming: _termname _TO _termname
+varname_renaming: _varname _TO _varname
 conname_renaming: CONNAME _TO CONNAME
 
 
@@ -179,11 +179,11 @@ type_synonym_declaration: _TYPE VARNAME tyvarkindings _EQ type _DOUBLESEMI
 
 //////////////// Type Class Declarations  ////////////////
 
-type_class_declaration: _CLASS class_quantification class_precondition CONNAME class_params _WHERE class_body _DOUBLESEMI
+type_class_declaration: _CLASS class_quantification optional_class_precondition CONNAME class_params _WHERE class_body _DOUBLESEMI
 
-class_quantification: (_FORALL mandatory_tyvarkindings _DOT)
+class_quantification: _FORALL mandatory_tyvarkindings _DOT
 
-class_precondition: (_LPAR _sepby{class_constraint,_COMMA} _RPAR _BIG_ARROW)?
+optional_class_precondition: (_LPAR _sepby{class_constraint,_COMMA} _RPAR _BIG_ARROW)?
 
 class_params: VARNAME*
 
@@ -218,8 +218,10 @@ guard: [_DOUBLEPIPE term]
 
 ////////////////  Instance Declaration  ////////////////
 
-instance_declaration: _INSTANCE class_quantification class_precondition CONNAME type* _WHERE instance_body _DOUBLESEMI
+instance_declaration: _INSTANCE optional_class_quantification optional_class_precondition CONNAME instance_params _WHERE instance_body _DOUBLESEMI
 
+optional_class_quantification: class_quantification?
+instance_params: type*
 instance_body: method_equation*
 
 // MethodEquation MetEq ::=  x Pat* = N  (Method Equation)
@@ -362,7 +364,7 @@ type_variable_binding: _LBRACE VARNAME _RBRACE
      | let
      | infix
      | infix_operator
-     | slice
+     | section
      | paren_term
 
 type_annotation: _annotation_left _COLON type
@@ -370,7 +372,7 @@ _annotation_left: variable
                 | constructor
                 | application
                 | infix_operator
-                | slice
+                | section
                 | paren_term
 
 variable: VARNAME
@@ -399,12 +401,12 @@ _application_left: variable
                  | constructor
                  | application
                  | infix_operator
-                 | slice
+                 | section
                  | paren_term
 _application_right: variable
                   | constructor
                   | infix_operator
-                  | slice
+                  | section
                   | paren_term
                   | type_instantiation
 
@@ -417,7 +419,7 @@ _case_scrutinee: variable
                | application
                | infix
                | infix_operator
-               | slice
+               | section
                | paren_term
 
 case_body: case_clause*
@@ -444,16 +446,16 @@ _infix_right: variable
             | constructor
             | application
             | infix_operator
-            | slice
+            | section
             | paren_term
 
 infix_operator: _LPAR OPERATOR _RPAR
 
-?slice: left_slice
-      | right_slice
+?section: left_section
+      | right_section
 
-left_slice: _LPAR term OPERATOR _RPAR
+left_section: _LPAR term OPERATOR _RPAR
 
-right_slice: _LPAR OPERATOR _infix_right _RPAR
+right_section: _LPAR OPERATOR _infix_right _RPAR
 
 paren_term: _LPAR term _RPAR

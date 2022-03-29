@@ -1,6 +1,5 @@
 module Demo importing
   | Foo
-  | Bar renaming (a to (==))
   | Baz unqualified using (c)
   | Quux unqualified hiding (d)
 where
@@ -24,6 +23,8 @@ class forall (a : Type) (b : Type). (Foo a, Bar b) => Baz a b where
 x : Foo a b;;
 
 x = foo x y;;
+
+instance Foo FLORP where;;
 
 instance forall (a : Type) (b : Type). (Foo a, Bar b) => Baz a b where
   | foo = x

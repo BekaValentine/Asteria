@@ -18,6 +18,7 @@ class Surface(object):
 class Kind(Surface):
     pass
 
+
 def Kind_from_cst(cst) -> Kind:
     if cst.data == 'type_kind':
         return TypeKind()
@@ -28,11 +29,15 @@ def Kind_from_cst(cst) -> Kind:
     raise
 
 
+# Type
+# TypeKind()
 @dataclass
 class TypeKind(Kind):
     pass
 
 
+# k1 -> k2
+# ArrowKind(k1, k2)
 @dataclass
 class ArrowKind(Kind):
     argument_kind: Kind
@@ -55,12 +60,14 @@ def TyVarKinding_from_cst(cst) -> TyVarKinding:
 class Type(Surface):
     pass
 
+
 def Type_from_cst(cst) -> Type:
+    print(repr(cst))
 
     if cst.data == 'type_variable':
         return VariableType(cst.children[0].value)
     elif cst.data == 'type_name':
-        return NameType(cst.children[0].value)
+        return TypeConstructorType(cst.children[0].value)
     elif cst.data == 'function_type':
         return FunctionType(Type_from_cst(cst.children[0]), Type_from_cst(cst.children[1]))
     elif cst.data == 'constrained_type':
@@ -77,16 +84,22 @@ def Type_from_cst(cst) -> Type:
     raise
 
 
+# a
+# VariableType('a')
 @dataclass
 class VariableType(Type):
     name: str
 
 
+# List
+# TypeConstructorType('List')
 @dataclass
-class NameType(Type):
+class TypeConstructorType(Type):
     name: str
 
 
+# t1 -> t2
+# FunctionType(t1, t2)
 @dataclass
 class FunctionType(Type):
     argument_type: Type
@@ -98,23 +111,30 @@ class ClassConstraint(Surface):
     name: str
     arguments: List[Type]
 
+
 def ClassConstraint_from_cst(cst) -> ClassConstraint:
     return ClassConstraint(cst.children[0].value,
                            [Type_from_cst(ty) for ty in cst.children[1].children])
 
 
+# (Functor f) => t
+# ConstrainedType([ClassConstraint("Functor", f)], t)
 @dataclass
 class ConstrainedType(Type):
     class_constraints: List[ClassConstraint]
     return_type: Type
 
 
+# forall (f : k). t
+# ForallType([TyVarKinding(["f"], k)], t)
 @dataclass
 class ForallType(Type):
     tyvar_kindings: List[TyVarKinding]
     scope: Type
 
 
+# f a
+# ApplicationType(f, a)
 @dataclass
 class ApplicationType(Type):
     function: Type
@@ -126,6 +146,7 @@ class ApplicationType(Type):
 @dataclass
 class Declaration(Surface):
     pass
+
 
 def Declaration_from_cst(cst) -> Declaration:
 
@@ -163,16 +184,20 @@ def Declaration_from_cst(cst) -> Declaration:
                             guard=Guard_from_cst(cst.children[2]),
                             definition=Term_from_cst(cst.children[3]))
     elif cst.data == 'instance_declaration':
-        return InstanceDeclaration([TyVarKinding_from_cst(tvk) for tvk in cst.children[0].children[0].children],
-                                   [ClassConstraint_from_cst(
+        if len(cst.children[0].children) > 0:
+            class_quantification_tvks = cst.children[0].children[0].children[0].children
+        else:
+            class_quantification_tvks = []
+
+        return InstanceDeclaration(instance_quantification=[TyVarKinding_from_cst(tvk) for tvk in class_quantification_tvks],
+                                   instance_precondition=[ClassConstraint_from_cst(
                                        con) for con in cst.children[1].children],
-                                   cst.children[2].value,
-                                   [Type_from_cst(ty)
-                                    for ty in cst.children[3].children],
-                                   [MethodEquation_from_cst(meq) for meq in cst.children[4].children])
+                                   name=cst.children[2].value,
+                                   instance_parameters=[Type_from_cst(ty)
+                                                        for ty in cst.children[3].children],
+                                   method_equations=[MethodEquation_from_cst(meq) for meq in cst.children[4].children])
 
     raise
-
 
 
 ################  Fixity Declarations  ################
@@ -180,6 +205,7 @@ def Declaration_from_cst(cst) -> Declaration:
 @dataclass
 class Fixity(Surface):
     pass
+
 
 def Fixity_from_cst(cst) -> Fixity:
     if cst.data == 'infix':
@@ -206,6 +232,8 @@ class InfixR(Fixity):
     pass
 
 
+# infix 5 *
+# FixityDeclaration(Infix(), 5, ["*"])
 @dataclass
 class FixityDeclaration(Declaration):
     fixity: Fixity
@@ -231,6 +259,7 @@ class ConstructorParameter(Surface):
     vars: List[str]
     type: Type
 
+
 def ConstructorParameter_from_cst(cst) -> ConstructorParameter:
     return ConstructorParameter([tok.value for tok in cst.children[0].children], Type_from_cst(cst.children[1]))
 
@@ -242,6 +271,7 @@ class ConstructorDeclaration(Surface):
     parameters: List[ConstructorParameter]
     return_type: Type
 
+
 def ConstructorDeclaration_from_cst(cst) -> ConstructorDeclaration:
     return ConstructorDeclaration(cst.children[0].value,
                                   [ConstructorTypeParameter_from_cst(
@@ -251,6 +281,27 @@ def ConstructorDeclaration_from_cst(cst) -> ConstructorDeclaration:
                                   Type_from_cst(cst.children[3]))
 
 
+# data Maybe (a : Type) where
+#   | Nothing : Maybe a
+#   | Just (x : a) : Maybe a
+#   ;;
+# DataDeclaration(
+#   "Maybe",
+#   TyVarKinding(["a"], TypeKind()),
+#   [
+#     ConstructorDeclaration(
+#       "Nothing",
+#       [],
+#       [],
+#       ApplicationType(TypeConstructorType("Maybe"), VariableType("a"))
+#     ),
+#     ConstructorDeclaration(
+#       "Just",
+#       [],
+#       [ConstructorParameter(["x"], TypeVariable("a"))],
+#       ApplicationType(TypeConstructorType("Maybe"), VariableType("a"))
+#     )
+#   ])
 @dataclass
 class DataDeclaration(Declaration):
     name: str
@@ -260,6 +311,8 @@ class DataDeclaration(Declaration):
 
 ################  Type Synonym Declarations  ################
 
+# type t1 = t2;;
+# TypeSynonymDeclaration(t1,t2)
 @dataclass
 class TypeSynonymDeclaration(Declaration):
     name: str
@@ -274,11 +327,24 @@ class MethodDeclaration(Surface):
     name: str
     type: Type
 
+
 def MethodDeclaration_from_cst(cst) -> MethodDeclaration:
     return MethodDeclaration(cst.children[0].value,
                              Type_from_cst(cst.children[1]))
 
 
+# class forall (a : k). C a where
+#   | m : t
+#   ;;
+# TypeClassDeclaration(
+#   [TyVarKinding(["a"], k)],
+#   [],
+#   "C",
+#   [VariableType("a")],
+#   [
+#     MethodDeclaration("m", t)
+#   ]
+# )
 @dataclass
 class TypeClassDeclaration(Declaration):
     class_quantification: List[TyVarKinding]
@@ -290,6 +356,9 @@ class TypeClassDeclaration(Declaration):
 
 ################  Type Signature  ################
 
+
+# x : t;;
+# TypeSignature("x", t)
 @dataclass
 class TypeSignature(Declaration):
     name: str
@@ -302,6 +371,7 @@ class TypeSignature(Declaration):
 class Pattern(Surface):
     pass
 
+
 def Pattern_from_cst(cst) -> Pattern:
     if cst.data == 'variable_pattern':
         return VariablePattern(cst.children[0].value)
@@ -313,11 +383,15 @@ def Pattern_from_cst(cst) -> Pattern:
     raise
 
 
+# x
+# VariablePattern("x")
 @dataclass
 class VariablePattern(Pattern):
     name: str
 
 
+#  Cons p1 p2
+# ConstructorPattern("Cons", [p1,p2])
 @dataclass
 class ConstructorPattern(Pattern):
     constructor: str
@@ -329,6 +403,7 @@ class ConstructorPattern(Pattern):
 @dataclass
 class Term(Surface):
     pass
+
 
 def Term_from_cst(cst) -> Term:
     if cst.data == 'type_annotation':
@@ -345,7 +420,7 @@ def Term_from_cst(cst) -> Term:
         return ApplicationTerm(Term_from_cst(cst.children[0]),
                                ApplicationArgument_from_cst(cst.children[1]))
     elif cst.data == 'case':
-        return CaseTerm([ Term_from_cst(c) for c in cst.children[0].children ],
+        return CaseTerm([Term_from_cst(c) for c in cst.children[0].children],
                         [CaseClause_from_cst(cls) for cls in cst.children[1].children])
     elif cst.data == 'let':
         return LetTerm([LetDeclaration_from_cst(decl) for decl in cst.children[0].children],
@@ -356,12 +431,12 @@ def Term_from_cst(cst) -> Term:
                          Term_from_cst(cst.children[2]))
     elif cst.data == 'infix_operator':
         return InfixOperatorTerm(cst.children[0].value)
-    elif cst.data == 'left_slice':
-        return LeftSliceTerm(cst.children[1].value,
-                             Term_from_cst(cst.children[0]))
-    elif cst.data == 'right_slice':
-        return RightSliceTerm(cst.children[0].value,
-                              Term_from_cst(cst.children[1]))
+    elif cst.data == 'left_section':
+        return LeftSectionTerm(cst.children[1].value,
+                               Term_from_cst(cst.children[0]))
+    elif cst.data == 'right_section':
+        return RightSectionTerm(cst.children[0].value,
+                                Term_from_cst(cst.children[1]))
     elif cst.data == 'paren_term':
         return Term_from_cst(cst.children[0])
     raise
@@ -371,6 +446,7 @@ def Term_from_cst(cst) -> Term:
 class Guard(Surface):
     term: Optional[Term]
 
+
 def Guard_from_cst(cst) -> Guard:
     if cst.children[0] is None:
         return Guard(None)
@@ -378,17 +454,23 @@ def Guard_from_cst(cst) -> Guard:
         return Guard(Term_from_cst(cst.children[0]))
 
 
+# m : t
+# TypeAnnotationTerm(m, t)
 @dataclass
 class TypeAnnotationTerm(Term):
     term: Term
     type: Type
 
 
+# x
+# VariableTerm("x")
 @dataclass
 class VariableTerm(Term):
     name: str
 
 
+# Just
+# ConstructorTerm("Just")
 @dataclass
 class ConstructorTerm(Term):
     constructor: str
@@ -398,16 +480,17 @@ class ConstructorTerm(Term):
 class FormalParameter(Surface):
     pass
 
+
 def FormalParameter_from_cst(cst) -> FormalParameter:
     if cst.data == 'untyped_variable_parameter':
         return UntypedVariableParameter(cst.children[0].value)
     elif cst.data == 'typed_variable_parameter':
-        return TypedVariableParameter([ tok.value for tok in cst.children[0].children ],
+        return TypedVariableParameter([tok.value for tok in cst.children[0].children],
                                       Type_from_cst(cst.children[1]))
     elif cst.data == 'unkinded_type_variable_parameter':
         return UnkindedTyVarParameter(cst.children[0].value)
     elif cst.data == 'kinded_type_variable_parameter':
-        return KindedTyVarParameter([ tok.value for tok in cst.children[0].children ],
+        return KindedTyVarParameter([tok.value for tok in cst.children[0].children],
                                     Kind_from_cst(cst.children[1]))
     raise
 
@@ -434,6 +517,14 @@ class KindedTyVarParameter(FormalParameter):
     kind: Kind
 
 
+# \{a} (x : t) -> m
+# LambdaTerm(
+#   [
+#     UnkindedTyVarParameter("a"),
+#     TypedVariableParameter(["x"], t)
+#   ],
+#   m
+# )
 @dataclass
 class LambdaTerm(Term):
     formal_parameters: List[FormalParameter]
@@ -444,8 +535,9 @@ class LambdaTerm(Term):
 class ApplicationArgument(Surface):
     pass
 
+
 def ApplicationArgument_from_cst(cst) -> ApplicationArgument:
-    if cst.data in ['variable', 'constructor', 'infix_operator', 'left_slice', 'right_slice', 'paren_term']:
+    if cst.data in ['variable', 'constructor', 'infix_operator', 'left_section', 'right_section', 'paren_term']:
         return TermArgument(Term_from_cst(cst))
     elif cst.data == 'type_instantiation':
         return TypeArgument(Type_from_cst(cst))
@@ -462,6 +554,8 @@ class TypeArgument(ApplicationArgument):
     type: Type
 
 
+# f {t} m
+# ApplicationTerm(ApplicationTerm(f,TypeArgument(t)), TermArgument(m))
 @dataclass
 class ApplicationTerm(Term):
     function: Term
@@ -474,12 +568,26 @@ class CaseClause(Surface):
     guard: Guard
     body: Term
 
+
 def CaseClause_from_cst(cst) -> CaseClause:
-    return CaseClause([ Pattern_from_cst(c) for c in cst.children[0].children ],
+    return CaseClause([Pattern_from_cst(c) for c in cst.children[0].children],
                       Guard_from_cst(cst.children[1]),
                       Term_from_cst(cst.children[2]))
 
 
+# case m | n of
+#    | p | q || g -> r
+#    ;;
+# CaseTerm(
+#   [m,n],
+#   [
+#     CaseClause(
+#       [p,q],
+#       g,
+#       r
+#     )
+#   ]
+# )
 @dataclass
 class CaseTerm(Term):
     scrutinees: List[Term]
@@ -489,6 +597,7 @@ class CaseTerm(Term):
 @dataclass
 class LetDeclaration(Surface):
     pass
+
 
 def LetDeclaration_from_cst(cst) -> LetDeclaration:
 
@@ -510,6 +619,7 @@ class LetTypeSignature(LetDeclaration):
     name: str
     type: Type
 
+
 @dataclass
 class LetTermEquation(LetDeclaration):
     name: str
@@ -518,13 +628,24 @@ class LetTermEquation(LetDeclaration):
     definition: Term
 
 
-
+# let x : t
+#   | x = m
+# in n
+# LetTerm(
+#   [
+#     LetTypeSignature("x",t),
+#     LetTermEquation("x", [], Guard(), m)
+#   ],
+#   n
+# )
 @dataclass
 class LetTerm(Term):
     declarations: List[LetDeclaration]
     scope: Term
 
 
+# x * y
+# InfixTerm("*", x, y)
 @dataclass
 class InfixTerm(Term):
     operator: str
@@ -532,26 +653,34 @@ class InfixTerm(Term):
     right_argument: Term
 
 
+# (*)
+# InfixOperatorTerm("*")
 @dataclass
 class InfixOperatorTerm(Term):
     operator: str
 
 
+# (x *)
+# LeftSectionTerm("*", x)
 @dataclass
-class LeftSliceTerm(Term):
+class LeftSectionTerm(Term):
     operator: str
-    argument: Term
+    left_argument: Term
 
 
+# (* y)
+# RightSectionTerm("*", y)
 @dataclass
-class RightSliceTerm(Term):
+class RightSectionTerm(Term):
     operator: str
-    argument: Term
+    right_argument: Term
 
 
 ################  Term Equation  ################
 
 
+# x p q || g = m
+# TermEquation("x", [p,q], g, m)
 @dataclass
 class TermEquation(Declaration):
     name: str
@@ -570,6 +699,7 @@ class MethodEquation(Surface):
     guard: Guard
     definition: Term
 
+
 def MethodEquation_from_cst(cst) -> MethodEquation:
     return MethodEquation(cst.children[0].value,
                           [Pattern_from_cst(pat)
@@ -578,12 +708,16 @@ def MethodEquation_from_cst(cst) -> MethodEquation:
                           Term_from_cst(cst.children[3]))
 
 
+# instance forall C A where
+#   | x = m
+#   ;;
+# InstanceDeclaration
 @dataclass
 class InstanceDeclaration(Declaration):
-    class_quantification: List[TyVarKinding]
-    class_precondition: List[ClassConstraint]
+    instance_quantification: List[TyVarKinding]
+    instance_precondition: List[ClassConstraint]
     name: str
-    arguments: List[Type]
+    instance_parameters: List[Type]
     method_equations: List[MethodEquation]
 
 
@@ -593,6 +727,7 @@ class InstanceDeclaration(Declaration):
 @dataclass
 class ImportType(Surface):
     pass
+
 
 def ImportType_from_cst(cst) -> ImportType:
     if cst.data == 'qualified_import':
@@ -614,6 +749,7 @@ class QualifiedImportType(ImportType):
 @dataclass
 class UsingHiding(Surface):
     pass
+
 
 def UsingHiding_from_cst(cst) -> Optional[UsingHiding]:
     if len(cst.children) == 0:
@@ -652,15 +788,23 @@ class RenamingClause(Surface):
     rename_from: str
     rename_to: str
 
+
 def RenamingClause_from_cst(cst) -> RenamingClause:
     return RenamingClause(rename_from=cst.children[0].value,
                           rename_to=cst.children[1].value)
 
 
+# import Foo
+# import Foo renaming (a to b)
+# import Foo as Bar
+# import Foo unqualified
+# import Foo unqualified using (a, b)
+# import Foo unqualified hiding (a, b)
 @dataclass
 class Import(Surface):
     import_type: ImportType
     renaming: List[RenamingClause]
+
 
 def Import_from_cst(cst) -> Import:
     return Import(import_type=ImportType_from_cst(cst.children[0]),
@@ -668,11 +812,14 @@ def Import_from_cst(cst) -> Import:
                             for cls in cst.children[1].children])
 
 
+# module M where ...
+# module M importing ... where ...
 @dataclass
 class Module(Surface):
     name: str
     imports: List[Import]
     declarations: List[Declaration]
+
 
 def Module_from_cst(cst) -> Module:
 
