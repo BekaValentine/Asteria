@@ -1,0 +1,284 @@
+_WS: /[\r\n\t ]+/
+%ignore _WS
+_sepby{x, sep}: x (sep x)*
+_sepby0{x, sep}: [x (sep x)*]
+
+////////////////  Keywords and Symbols  ////////////////
+
+_DATA:         "data"
+_WHERE:        "where"
+_CASE:         "case"
+_OF:           "of"
+_FORALL:       "forall"
+_TYPEKIND:     "Type"
+
+_EQ:         "="
+_COLON:      ":"
+_ARROW:      "->"
+_LAMBDA:     "\\"
+_AT:         "@"
+_DOT:        "."
+_COMMA:      ","
+_PIPE:       "|"
+_DOUBLEPIPE: "||"
+_LPAR:       "("
+_RPAR:       ")"
+_LBRACE:     "{"
+_RBRACE:     "}"
+_LBRACK:     "["
+_RBRACK:     "]"
+_SEMI:       ";"
+_DOUBLESEMI: ";;"
+_UNDER:      "_"
+_DOLLAR:     "$"
+
+_COMMENT:    "--" /[^\n]*/ "\n"
+%ignore _COMMENT
+
+
+
+
+
+
+////////////////  Names and Operators  ////////////////
+
+VARNAME: /(?!(_|datatype|case|of|forall)\b)[a-z_][a-zA-Z0-9_]*/
+CONNAME: /(?!(Type)\b)[A-Z][a-zA-Z0-9_]*/
+OPERATOR: /(=>|:|->|@|,|\||;;)[~!@#$%^&*\-|+=:;<>?\/\.]+/
+        | /=[~!@#$%^&*\-|+=:;<?\/\.][~!@#$%^&*\-|+=:;<>?\/\.]*/
+        | /-([~!@#$%^&*\|+=:;<?\/\.][~!@#$%^&*\-|+=:;<>?\/\.]*)?/
+        | /;([~!@#$%^&*\-|+=:<>?\/\.][~!@#$%^&*\-|+=:;<>?\/\.]*)?/
+        | /[~!#$%^&*+<>?\/\.][~!@#$%^&*\-|+=:;<>?\/\.]*/
+
+module_name: _sepby{CONNAME, _DOT}
+declared_type_constructor_name: module_name _DOLLAR CONNAME
+declared_constructor_name: module_name _DOLLAR CONNAME _DOLLAR CONNAME
+declared_term_name: module_name _DOLLAR (VARNAME | OPERATOR)
+
+
+
+
+
+////////////////  Modules  ////////////////
+
+
+module: _declaration*
+
+
+
+////////////////  Declarations  ////////////////
+
+// Declaration Decl
+//   ::=  datatype Cn TVK*;;               (Datatype Declaration)
+//     |  constructor Cn TVK* VT* : A;;    (Constructor Declaration)
+//     |  x : A;;                          (Term Type Signature)
+//     |  x = N;;                          (Term Equation)
+
+_declaration: data_declaration
+            | term_declaration
+
+tyvarkindings: tyvarkinding*
+tyvarkinding: _LPAR VARNAME _COLON _kind _RPAR
+
+
+
+
+
+
+////////////////  Data Declarations  ////////////////
+
+data_declaration: _DATA declared_type_constructor_name tyvarkindings _WHERE constructor_declarations _DOUBLESEMI
+
+constructor_declarations: constructor_declaration*
+constructor_declaration: _PIPE declared_constructor_name constructor_decl_type_arguments constructor_decl_arguments _COLON _type
+
+constructor_decl_type_arguments: constructor_decl_type_argument*
+constructor_decl_type_argument: _LBRACE VARNAME _COLON _kind _RBRACE
+
+constructor_decl_arguments: constructor_decl_argument*
+constructor_decl_argument: _LPAR VARNAME _COLON _type _RPAR
+
+
+
+
+
+
+////////////////  Type Declaration  ////////////////
+
+term_declaration: declared_term_name _COLON _type _EQ _term _DOUBLESEMI
+
+
+
+
+
+
+////////////////  Kinds  ////////////////
+
+_kind: type_kind
+     | arrow_kind
+     | paren_kind
+
+type_kind: _TYPEKIND
+
+arrow_kind: _arrow_kind_left _ARROW _kind
+_arrow_kind_left: type_kind
+                | paren_kind
+
+paren_kind: _LPAR _kind _RPAR
+
+
+
+
+
+
+////////////////  Types  ////////////////
+
+// Type A, B ::=  a              (Type Variable)
+//             |  Cn(A*)         (Type Constructor)
+//             |  A -> B         (Function Type)
+//             |  forall TVK. B  (Forall Type)
+//             |  A B            (Type Application)
+//             | \a -> B         (Type Lambda)
+
+_type: type_variable
+     | type_constructor
+     | function_type
+     | forall_type
+     | type_application
+     | type_lambda
+     | paren_type
+
+type_variable: VARNAME
+
+type_constructor: declared_type_constructor_name _LPAR type_constructor_arguments _RPAR
+type_constructor_arguments: _sepby0{_type, _COMMA}
+
+function_type: _function_type_left _ARROW _type
+_function_type_left: type_variable
+                   | type_constructor
+                   | type_application
+                   | paren_type
+
+forall_type: _FORALL tyvarkinding _DOT _type
+
+type_application: _type_application_left _type_application_right
+_type_application_left: type_variable
+                      | type_constructor
+                      | type_application
+                      | paren_type
+_type_application_right: type_variable
+                       | type_constructor
+                       | paren_type
+
+type_lambda: _LAMBDA VARNAME _ARROW _type
+
+paren_type: _LPAR _type _RPAR
+
+
+
+
+
+
+//////////////  Patterns  ////////////////
+
+_pattern: variable_pattern
+        | wildcard_pattern
+        | constructor_pattern
+        | paren_pattern
+
+variable_pattern: VARNAME
+
+wildcard_pattern: _UNDER
+
+constructor_pattern: declared_constructor_name _LPAR constructor_pattern_arguments _RPAR
+constructor_pattern_arguments: constructor_pattern_type_arguments _SEMI constructor_pattern_term_arguments
+_type_pattern: type_variable_pattern
+             | type_wildcard_pattern
+type_variable_pattern: VARNAME
+type_wildcard_pattern: _UNDER
+constructor_pattern_type_arguments: _sepby0{_type_pattern, _COMMA}
+constructor_pattern_term_arguments: _sepby0{_pattern, _COMMA}
+
+paren_pattern: _LPAR _pattern _RPAR
+
+
+
+
+
+
+////////////////  Terms  ////////////////
+
+// Term M, N ::=  M : A               (Type Annotation)
+//             |  x                   (Variable)
+//             |  Cn                  (Constructor)
+//             |  \x -> M             (Lambda Abstraction)
+//             |  M N                 (Function Application)
+//             |  \{a} -> M           (Type Abstraction)
+//             |  M {A}               (Type Instantiation)
+//             |  case M* of Cls*     (Case)
+
+_term: type_annotation
+     | variable
+     | declared_term
+     | constructor
+     | term_lambda
+     | term_application
+     | type_abstraction
+     | type_instantiation
+     | case
+     | paren_term
+
+type_annotation: _annotation_left _COLON _type
+_annotation_left: variable
+                | declared_term
+                | constructor
+                | term_application
+                | type_instantiation
+                | paren_term
+
+variable: VARNAME
+
+declared_term: declared_term_name
+
+constructor: declared_constructor_name _LPAR constructor_arguments _RPAR
+constructor_arguments: constructor_type_arguments _SEMI constructor_term_arguments
+constructor_type_arguments: _sepby0{_type, _COMMA}
+constructor_term_arguments: _sepby0{_term, _COMMA}
+
+term_lambda: _LAMBDA VARNAME _ARROW _term
+
+term_application: _application_left _application_right
+_application_left: variable
+                 | declared_term
+                 | constructor
+                 | term_application
+                 | type_instantiation
+                 | paren_term
+_application_right: variable
+                  | declared_term
+                  | constructor
+                  | paren_term
+
+type_abstraction: _LAMBDA _LBRACE VARNAME _RBRACE _ARROW _term
+
+type_instantiation: _application_left _LBRACE _type _RBRACE
+
+case: _CASE case_scrutinees _OF case_body
+case_scrutinees: _sepby{_case_scrutinee,_PIPE}
+_case_scrutinee: variable
+               | declared_term
+               | constructor
+               | term_application
+               | type_instantiation
+               | paren_term
+
+case_body: case_clause*
+
+// CaseClause Cls ::=  | Pat* || G -> N  (Case Clause)
+case_clause: _PIPE patterns guard _ARROW _term
+
+guard: [_DOUBLEPIPE _term]
+
+patterns: _sepby{_pattern,_PIPE}
+
+paren_term: _LPAR _term _RPAR

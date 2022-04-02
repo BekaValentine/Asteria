@@ -62,8 +62,6 @@ class Type(Surface):
 
 
 def Type_from_cst(cst) -> Type:
-    print(repr(cst))
-
     if cst.data == 'type_variable':
         return VariableType(cst.children[0].value)
     elif cst.data == 'type_name':
@@ -375,6 +373,8 @@ class Pattern(Surface):
 def Pattern_from_cst(cst) -> Pattern:
     if cst.data == 'variable_pattern':
         return VariablePattern(cst.children[0].value)
+    elif cst.data == 'wildcard_pattern':
+        return WildcardPattern()
     elif cst.data == 'constructor_pattern':
         return ConstructorPattern(cst.children[0].value,
                                   [Pattern_from_cst(pat) for pat in cst.children[1].children])
@@ -388,6 +388,13 @@ def Pattern_from_cst(cst) -> Pattern:
 @dataclass
 class VariablePattern(Pattern):
     name: str
+
+
+# _
+# WildcardPattern()
+@dataclass
+class WildcardPattern(Pattern):
+    pass
 
 
 #  Cons p1 p2
@@ -448,7 +455,7 @@ class Guard(Surface):
 
 
 def Guard_from_cst(cst) -> Guard:
-    if cst.children[0] is None:
+    if len(cst.children) == 0:
         return Guard(None)
     else:
         return Guard(Term_from_cst(cst.children[0]))
@@ -477,20 +484,65 @@ class ConstructorTerm(Term):
 
 
 @dataclass
+class VarParameter(Surface):
+    pass
+
+
+def VarParameter_from_cst(cst):
+    if cst.data == 'named_var_parameter':
+        return NamedVarParameter(cst.children[0].value)
+    elif cst.data == 'wildcard_var_parameter':
+        return WildcardVarParameter()
+
+
+@dataclass
+class NamedVarParameter(VarParameter):
+    name: str
+
+
+@dataclass
+class WildcardVarParameter(VarParameter):
+    pass
+
+
+@dataclass
+class TyVarParameter(Surface):
+    pass
+
+
+def TyVarParameter_from_cst(cst):
+    if cst.data == 'named_tyvar_parameter':
+        return NamedTyVarParameter(cst.children[0].value)
+    elif cst.data == 'wildcard_tyvar_parameter':
+        return WildcardTyVarParameter()
+
+
+@dataclass
+class NamedTyVarParameter(TyVarParameter):
+    name: str
+
+
+@dataclass
+class WildcardTyVarParameter(TyVarParameter):
+    pass
+
+
+@dataclass
 class FormalParameter(Surface):
     pass
 
 
 def FormalParameter_from_cst(cst) -> FormalParameter:
+    print(cst)
     if cst.data == 'untyped_variable_parameter':
-        return UntypedVariableParameter(cst.children[0].value)
+        return UntypedVariableParameter(VarParameter_from_cst(cst.children[0]))
     elif cst.data == 'typed_variable_parameter':
-        return TypedVariableParameter([tok.value for tok in cst.children[0].children],
+        return TypedVariableParameter([VarParameter_from_cst(c) for c in cst.children[0].children],
                                       Type_from_cst(cst.children[1]))
     elif cst.data == 'unkinded_type_variable_parameter':
-        return UnkindedTyVarParameter(cst.children[0].value)
+        return UnkindedTyVarParameter(TyVarParameter_from_cst(cst.children[0]))
     elif cst.data == 'kinded_type_variable_parameter':
-        return KindedTyVarParameter([tok.value for tok in cst.children[0].children],
+        return KindedTyVarParameter([TyVarParameter_from_cst(c) for c in cst.children[0].children],
                                     Kind_from_cst(cst.children[1]))
     raise
 
@@ -725,15 +777,26 @@ class InstanceDeclaration(Declaration):
 
 
 @dataclass
+class ModuleName(Surface):
+    root_name: str
+    sub_names: List[str]
+
+
+def ModuleName_from_cst(cst):
+    return ModuleName(root_name=cst.children[0].value,
+                      sub_names=[c.value for c in cst.children[1:]])
+
+
+@dataclass
 class ImportType(Surface):
     pass
 
 
 def ImportType_from_cst(cst) -> ImportType:
     if cst.data == 'qualified_import':
-        return QualifiedImportType(imported_name=cst.children[0].value)
+        return QualifiedImportType(imported_name=ModuleName_from_cst(cst.children[0]))
     elif cst.data == 'unqualified_import':
-        return UnqualifiedImportType(imported_name=cst.children[0].value,
+        return UnqualifiedImportType(imported_name=ModuleName_from_cst(cst.children[0]),
                                      using_hiding=UsingHiding_from_cst(cst.children[1]))
     elif cst.data == 'as_import':
         return AsImportType(imported_name=cst.children[0].value,
@@ -816,15 +879,13 @@ def Import_from_cst(cst) -> Import:
 # module M importing ... where ...
 @dataclass
 class Module(Surface):
-    name: str
     imports: List[Import]
     declarations: List[Declaration]
 
 
 def Module_from_cst(cst) -> Module:
 
-    return Module(name=cst.children[0].value,
-                  imports=[Import_from_cst(imp)
-                           for imp in cst.children[1].children],
+    return Module(imports=[Import_from_cst(imp)
+                           for imp in cst.children[0].children],
                   declarations=[Declaration_from_cst(decl)
-                                for decl in cst.children[2].children])
+                                for decl in cst.children[1].children])

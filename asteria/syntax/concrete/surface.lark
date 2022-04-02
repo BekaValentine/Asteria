@@ -1,3 +1,4 @@
+
 _WS: /[\r\n\t ]+/
 %ignore _WS
 _sepby{x, sep}: x (sep x)*
@@ -45,6 +46,10 @@ _RBRACE:     "}"
 _LBRACK:     "["
 _RBRACK:     "]"
 _DOUBLESEMI: ";;"
+_UNDER:      "_"
+
+_COMMENT:    "--" /[^\n]*/ "\n"
+%ignore _COMMENT
 
 
 
@@ -64,7 +69,7 @@ OPERATOR: /(=>|:|->|@|,|\||;;)[~!@#$%^&*\-|+=:;<>?\/\.]+/
 _name: VARNAME | CONNAME | _LPAR OPERATOR _RPAR
 _varname: VARNAME | _LPAR OPERATOR _RPAR
 tyvarnames: VARNAME+
-varnames: VARNAME+
+dotted_module_name: _sepby{CONNAME, _DOT}
 
 
 
@@ -73,28 +78,28 @@ varnames: VARNAME+
 ////////////////  Modules  ////////////////
 
 
-module: _MODULE CONNAME imports _WHERE declarations _DOUBLESEMI?
+module: _MODULE imports _WHERE declarations _DOUBLESEMI?
 
 imports: [_IMPORTING import+]
 
-import: _PIPE import_sort renaming
+import: _PIPE _import_sort renaming
 
-?import_sort: qualified_import
+_import_sort: qualified_import
             | unqualified_import
             | as_import
 
-qualified_import: CONNAME
-unqualified_import: CONNAME _UNQUALIFIED using_hiding
-as_import: CONNAME _AS CONNAME
+qualified_import: dotted_module_name
+unqualified_import: dotted_module_name _UNQUALIFIED using_hiding
+as_import: dotted_module_name _AS CONNAME
 
 using_hiding: (import_using | import_hiding)?
 
 import_using: _USING _LPAR _sepby{_name, _COMMA} _RPAR
 import_hiding: _HIDING _LPAR _sepby{_name, _COMMA} _RPAR
 
-renaming: (_RENAMING _LPAR renaming_clause (_COMMA renaming_clause)* _RPAR)?
+renaming: (_RENAMING _LPAR _renaming_clause (_COMMA _renaming_clause)* _RPAR)?
 
-?renaming_clause: varname_renaming
+_renaming_clause: varname_renaming
                 | conname_renaming
 
 varname_renaming: _varname _TO _varname
@@ -107,17 +112,17 @@ conname_renaming: CONNAME _TO CONNAME
 
 ////////////////  Declarations  ////////////////
 
-declarations: declaration*
+declarations: _declaration*
 
 // Declaration Decl
-//   ::=  data Cn TVK* where ConDecl*             (Data Declaration)
-//     |  type f TVK* = A                         (Type Synonym Declaration)
-//     |  class CCn TVK* <= (CC*) where MetDecl*  (Type Class Declaration)
-//     |  x : A                                   (Term Type Signature)
-//     |  x Pat* | M? = N                         (Term Equation)
-//     |  instance CCn A+ <= (CC*) where MetEq*   (Instance Declaration)
+//   ::=  data Cn TVK* where ConDecl*;;             (Data Declaration)
+//     |  type f TVK* = A;;                         (Type Synonym Declaration)
+//     |  class CCn TVK* <= (CC*) where MetDecl*;;  (Type Class Declaration)
+//     |  x : A;;                                   (Term Type Signature)
+//     |  x Pat* | M? = N;;                         (Term Equation)
+//     |  instance CCn A+ <= (CC*) where MetEq*;;   (Instance Declaration)
 
-?declaration: fixity_declaration
+_declaration: fixity_declaration
             | data_declaration
             | type_synonym_declaration
             | type_class_declaration
@@ -127,7 +132,7 @@ declarations: declaration*
 
 tyvarkindings: tyvarkinding*
 mandatory_tyvarkindings: tyvarkinding+
-tyvarkinding: _LPAR tyvarnames _COLON kind _RPAR
+tyvarkinding: _LPAR tyvarnames _COLON _kind _RPAR
 
 
 
@@ -155,13 +160,14 @@ data_declaration: _DATA CONNAME tyvarkindings _WHERE data_body _DOUBLESEMI
 
 data_body: constructor_declaration*
 
-constructor_declaration: _PIPE CONNAME constructor_type_arguments constructor_arguments _COLON type
+constructor_declaration: _PIPE CONNAME constructor_type_arguments constructor_arguments _COLON _type
 
 constructor_type_arguments: constructor_type_argument*
-constructor_type_argument: _LBRACE tyvarnames _COLON kind _RBRACE
+constructor_type_argument: _LBRACE tyvarnames _COLON _kind _RBRACE
 
 constructor_arguments: constructor_argument*
-constructor_argument: _LPAR varnames _COLON type _RPAR
+constructor_argument: _LPAR constructor_varnames _COLON _type _RPAR
+constructor_varnames: VARNAME+
 
 
 
@@ -170,7 +176,7 @@ constructor_argument: _LPAR varnames _COLON type _RPAR
 
 //////////////// Type Synonym Declarations  ////////////////
 
-type_synonym_declaration: _TYPE VARNAME tyvarkindings _EQ type _DOUBLESEMI
+type_synonym_declaration: _TYPE VARNAME tyvarkindings _EQ _type _DOUBLESEMI
 
 
 
@@ -190,7 +196,7 @@ class_params: VARNAME*
 class_body: method_declaration*
 
 // MethodDeclaration MetDecl ::=  x : A  (Method Declaration)
-method_declaration: _PIPE VARNAME _COLON type
+method_declaration: _PIPE VARNAME _COLON _type
 
 
 
@@ -198,7 +204,7 @@ method_declaration: _PIPE VARNAME _COLON type
 
 ////////////////  Type Signature  ////////////////
 
-type_signature: VARNAME _COLON type _DOUBLESEMI
+type_signature: VARNAME _COLON _type _DOUBLESEMI
 
 
 
@@ -207,9 +213,9 @@ type_signature: VARNAME _COLON type _DOUBLESEMI
 
 ////////////////  Term Equation  ////////////////
 
-term_equation: VARNAME equation_arg_patterns guard _EQ term _DOUBLESEMI
+term_equation: VARNAME argument_patterns guard _EQ _term _DOUBLESEMI
 
-guard: [_DOUBLEPIPE term]
+guard: [_DOUBLEPIPE _term]
 
 
 
@@ -221,11 +227,11 @@ guard: [_DOUBLEPIPE term]
 instance_declaration: _INSTANCE optional_class_quantification optional_class_precondition CONNAME instance_params _WHERE instance_body _DOUBLESEMI
 
 optional_class_quantification: class_quantification?
-instance_params: type*
+instance_params: _type*
 instance_body: method_equation*
 
 // MethodEquation MetEq ::=  x Pat* = N  (Method Equation)
-method_equation: _PIPE VARNAME equation_arg_patterns guard _EQ term
+method_equation: _PIPE VARNAME argument_patterns guard _EQ _term
 
 
 
@@ -234,17 +240,17 @@ method_equation: _PIPE VARNAME equation_arg_patterns guard _EQ term
 
 ////////////////  Kinds  ////////////////
 
-?kind: type_kind
+_kind: type_kind
      | arrow_kind
      | paren_kind
 
 type_kind: _TYPEKIND
 
-arrow_kind: _arrow_kind_left _ARROW kind
+arrow_kind: _arrow_kind_left _ARROW _kind
 _arrow_kind_left: type_kind
                 | paren_kind
 
-?paren_kind: _LPAR kind _RPAR
+paren_kind: _LPAR _kind _RPAR
 
 
 
@@ -260,7 +266,7 @@ _arrow_kind_left: type_kind
 //             |  forall TVK. B  (Forall Type)
 //             |  A B            (Type Application)
 
-?type: type_variable
+_type: type_variable
      | type_name
      | function_type
      | constrained_type
@@ -272,15 +278,15 @@ type_variable: VARNAME
 
 type_name: CONNAME
 
-function_type: _function_type_left _ARROW type
+function_type: _function_type_left _ARROW _type
 _function_type_left: type_variable
                    | type_name
                    | type_application
                    | paren_type
 
-constrained_type: _LPAR _sepby{class_constraint,_COMMA} _RPAR _BIG_ARROW type
+constrained_type: _LPAR _sepby{class_constraint,_COMMA} _RPAR _BIG_ARROW _type
 
-forall_type: _FORALL mandatory_tyvarkindings _DOT type
+forall_type: _FORALL mandatory_tyvarkindings _DOT _type
 
 type_application: _type_application_left _type_application_right
 _type_application_left: type_variable
@@ -291,7 +297,7 @@ _type_application_right: type_variable
                        | type_name
                        | paren_type
 
-paren_type: _LPAR type _RPAR
+paren_type: _LPAR _type _RPAR
 
 
 
@@ -302,7 +308,7 @@ paren_type: _LPAR type _RPAR
 
 class_constraint: CONNAME constraint_args
 
-constraint_args: type*
+constraint_args: _type*
 
 
 
@@ -311,30 +317,29 @@ constraint_args: type*
 
 ////////////////  Patterns  ////////////////
 
-?pattern: variable_pattern
+_pattern: variable_pattern
+        | wildcard_pattern
         | constructor_pattern
         | paren_pattern
 
 variable_pattern: VARNAME
 
+wildcard_pattern: _UNDER
+
 constructor_pattern: CONNAME argument_patterns
 
-paren_pattern: _LPAR pattern _RPAR
+paren_pattern: _LPAR _pattern _RPAR
 
-argument_patterns: argument_pattern*
+argument_patterns: _argument_pattern*
 
-?argument_pattern: variable_pattern
-                 | no_arg_constructor_pattern -> pattern
+_argument_pattern: variable_pattern
+                 | type_variable_pattern
+                 | no_arg_constructor_pattern
                  | paren_pattern
 
 no_arg_constructor_pattern: CONNAME
 
-equation_arg_patterns: equation_arg_pattern*
-
-?equation_arg_pattern: argument_pattern
-                     | type_variable_binding
-
-type_variable_binding: _LBRACE VARNAME _RBRACE
+type_variable_pattern: _LBRACE VARNAME _RBRACE
 
 
 
@@ -355,7 +360,7 @@ type_variable_binding: _LBRACE VARNAME _RBRACE
 //             |  M op N              (Infix Expression)
 //             |  (op)                (Infix Operator)
 
-?term: type_annotation
+_term: type_annotation
      | variable
      | constructor
      | lambda
@@ -364,53 +369,68 @@ type_variable_binding: _LBRACE VARNAME _RBRACE
      | let
      | infix
      | infix_operator
-     | section
+     | left_section
+     | right_section
      | paren_term
 
-type_annotation: _annotation_left _COLON type
+type_annotation: _annotation_left _COLON _type
 _annotation_left: variable
                 | constructor
                 | application
                 | infix_operator
-                | section
+                | left_section
+                | right_section
                 | paren_term
 
 variable: VARNAME
 
 constructor: CONNAME
 
-lambda: _LAMBDA formal_parameters _ARROW term
+lambda: _LAMBDA formal_parameters _ARROW _term
 
-formal_parameters: formal_parameter+
+formal_parameters: _formal_parameter+
 
-?formal_parameter: untyped_variable_parameter
+_formal_parameter: untyped_variable_parameter
                  | typed_variable_parameter
                  | unkinded_type_variable_parameter
                  | kinded_type_variable_parameter
 
-untyped_variable_parameter: VARNAME
+untyped_variable_parameter: _var_parameter
+_var_parameter: named_var_parameter
+              | wildcard_var_parameter
+named_var_parameter: VARNAME
+wildcard_var_parameter: _UNDER
 
-typed_variable_parameter: _LPAR varnames _COLON type _RPAR
+var_parameters: _var_parameter+
 
-unkinded_type_variable_parameter: _LBRACE VARNAME _RBRACE
+typed_variable_parameter: _LPAR var_parameters _COLON _type _RPAR
 
-kinded_type_variable_parameter: _LBRACE tyvarnames _COLON kind _RBRACE
+unkinded_type_variable_parameter: _LBRACE _tyvar_parameter _RBRACE
+_tyvar_parameter: named_tyvar_parameter
+                | wildcard_tyvar_parameter
+named_tyvar_parameter: VARNAME
+wildcard_tyvar_parameter: _UNDER
+tyvar_parameters: _tyvar_parameter+
+
+kinded_type_variable_parameter: _LBRACE tyvar_parameters _COLON _kind _RBRACE
 
 application: _application_left _application_right
 _application_left: variable
                  | constructor
                  | application
                  | infix_operator
-                 | section
+                 | left_section
+                 | right_section
                  | paren_term
 _application_right: variable
                   | constructor
                   | infix_operator
-                  | section
+                  | left_section
+                  | right_section
                   | paren_term
                   | type_instantiation
 
-type_instantiation: _LBRACE type _RBRACE
+type_instantiation: _LBRACE _type _RBRACE
 
 case: _CASE case_scrutinees _OF case_body
 case_scrutinees: _case_scrutinee (_PIPE _case_scrutinee)*
@@ -419,43 +439,50 @@ _case_scrutinee: variable
                | application
                | infix
                | infix_operator
-               | section
+               | left_section
+               | right_section
                | paren_term
 
 case_body: case_clause*
 
 // CaseClause Cls ::=  | Pat* || G -> N  (Case Clause)
-case_clause: _PIPE patterns guard _ARROW term
+case_clause: _PIPE patterns guard _ARROW _term
 
-patterns: pattern (_PIPE pattern)*
+patterns: _pattern (_PIPE _pattern)*
 
-let: _LET let_declarations _IN term
+let: _LET let_declarations _IN _term
 
-let_declarations: let_declaration (_PIPE let_declaration)*
+let_declarations: _let_declaration (_PIPE _let_declaration)*
 
 // LetDec LDecl ::=  x : A             (Let Type Signature)
 //                |  x Pat* || M = N   (Let Term Equation)
-?let_declaration: let_type_signature
+_let_declaration: let_type_signature
                 | let_term_equation
 
-let_type_signature: VARNAME _COLON type
-let_term_equation: VARNAME equation_arg_patterns guard _EQ term
+let_type_signature: VARNAME _COLON _type
+let_term_equation: VARNAME argument_patterns guard _EQ _term
 
-infix: term OPERATOR _infix_right
-_infix_right: variable
-            | constructor
-            | application
-            | infix_operator
-            | section
-            | paren_term
+infix: _infix_argument_left OPERATOR _infix_argument_right
+_infix_argument_left: variable
+                    | constructor
+                    | application
+                    | infix
+                    | infix_operator
+                    | left_section
+                    | right_section
+                    | paren_term
+_infix_argument_right: variable
+                     | constructor
+                     | application
+                     | infix_operator
+                     | left_section
+                     | right_section
+                     | paren_term
 
 infix_operator: _LPAR OPERATOR _RPAR
 
-?section: left_section
-      | right_section
+left_section: _LPAR _infix_argument_right OPERATOR _RPAR
 
-left_section: _LPAR term OPERATOR _RPAR
+right_section: _LPAR OPERATOR _infix_argument_right _RPAR
 
-right_section: _LPAR OPERATOR _infix_right _RPAR
-
-paren_term: _LPAR term _RPAR
+paren_term: _LPAR _term _RPAR

@@ -1,7 +1,7 @@
 import lark
 from pathlib import Path
 
-path = Path(__file__).parent / 'asteria.lark'
+path = Path(__file__).parent / 'core.lark'
 with path.open() as f:
     grammar = f.read()
 

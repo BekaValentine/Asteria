@@ -41,12 +41,14 @@ class DeclaredTypeConstructorName(Core):
     modules: List[str]
     name: str
 
+
 # Data.List$List$Cons
-# DeclaredConstructorName(DeclaredTypeName(["Data","List"], "List"), "Cons")
+# DeclaredConstructorName(DeclaredTypeConstructorName(["Data","List"], "List"), "Cons")
 @dataclass
 class DeclaredConstructorName(Core):
-    type_name: DeclaredTypeName
+    type_name: DeclaredTypeConstructorName
     name: str
+
 
 # Data.List$reverse$reverseOnto
 # DeclaredTermName(["Data", "List"], "reverse", ["reverseOnto"])
@@ -112,6 +114,8 @@ class LambdaType(Type):
 
 # f $ a
 # ApplicationType(VariableType("f"), VariableType("a"))
+
+
 @dataclass
 class ApplicationType(Type):
     function: Type
@@ -123,8 +127,6 @@ class ApplicationType(Type):
 @dataclass
 class Declaration(Core):
     pass
-
-
 
 
 ################  Data Declarations  ################
@@ -142,7 +144,7 @@ class ConstructorParameter(Core):
     type: Type
 
 
-# constructor Data.Pair$Pair$MkPair {a : Type} {b : Type} (x : a) (y : b) : Data.Pair$Pair(a;b)
+# constructor Data.Pair$Pair$MkPair {a : Type} {b : Type} (x : a) (y : b) : Data.Pair$Pair(a;b);;
 @dataclass
 class ConstructorDeclaration(Declaration):
     name: DeclaredConstructorName
@@ -152,7 +154,7 @@ class ConstructorDeclaration(Declaration):
     return_type_params: List[Type]
 
 
-# datatype Data.Pair$Pair (a : Type) (b : Type)
+# datatype Data.Pair$Pair (a : Type) (b : Type);;
 @dataclass
 class TypeConstructorDeclaration(Declaration):
     name: DeclaredTypeConstructorName
@@ -161,12 +163,11 @@ class TypeConstructorDeclaration(Declaration):
 
 ################  Type Signature  ################
 
-# Data.List$reverse : ...
+# Data.List$reverse : ...;;
 @dataclass
 class TypeSignature(Declaration):
     name: DeclaredTermName
     type: Type
-
 
 
 ################  Patterns  ################
@@ -245,7 +246,7 @@ class AbstractionTerm(Term):
     body: Term
 
 
-# f $ x
+# f x
 # ApplicationTerm(VariableTerm("f"), VariableTerm("x"))
 @dataclass
 class ApplicationTerm(Term):
@@ -253,7 +254,7 @@ class ApplicationTerm(Term):
     argument: Term
 
 
-# f @ a
+# f {a}
 # InstantiationTerm(VariableTerm("f"), VariableType("a"))
 @dataclass
 class InstantiationTerm(Term):
@@ -282,7 +283,7 @@ class CaseTerm(Term):
 ################  Term Equation  ################
 
 
-# Data.List$reverse$reverseOnto = ...
+# Data.List$reverse$reverseOnto = ...;;
 @dataclass
 class TermEquation(Declaration):
     name: DeclaredTermName

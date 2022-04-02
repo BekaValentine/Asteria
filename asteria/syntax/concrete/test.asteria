@@ -1,5 +1,6 @@
-module Demo importing
-  | Foo
+module
+importing
+  | Foo.Bar
   | Baz unqualified using (c)
   | Quux unqualified hiding (d)
 where
@@ -9,7 +10,7 @@ data Foo (a : Type) where
   ;;
 
 data Exists (f : Type -> Type) where
-  | Witness {a : Type} (x : a) (pf : f a) : Exists f
+  | Witness {a : Type} (pf : f a) : Exists f
   ;;
 
 type bar (a : Type) = Foo a;;
@@ -33,7 +34,7 @@ instance forall (a : Type) (b : Type). (Foo a, Bar b) => Baz a b where
   ;;
 
 x = case y of
-  | Foo y | x -> z
+  | Foo y | x | _ -> z
   ;;
 
 map : forall (a : Type) (b : Type). (a -> b) -> List a -> List a;;
@@ -71,7 +72,9 @@ x = let y : Bool
       | y = True
     in False;;
 
-x = \a (b : C) {d} {e : Type} -> f;;
+x = \a _ (b _ : C) {d} {e _ : Type} -> f;;
 
 x = case x | y | z of
        | a | b | c || foo -> done;;
+
+f = \_ -> g;;
