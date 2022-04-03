@@ -533,7 +533,6 @@ class FormalParameter(Surface):
 
 
 def FormalParameter_from_cst(cst) -> FormalParameter:
-    print(cst)
     if cst.data == 'untyped_variable_parameter':
         return UntypedVariableParameter(VarParameter_from_cst(cst.children[0]))
     elif cst.data == 'typed_variable_parameter':

@@ -1,7 +1,7 @@
 import lark
 from pathlib import Path
 
-path = Path(__file__).parent / 'surface.lark'
+path = Path(__file__).parent / 'concrete.lark'
 with path.open() as f:
     grammar = f.read()
 
