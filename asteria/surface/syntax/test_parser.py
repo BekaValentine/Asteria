@@ -1,8 +1,8 @@
 import lark
 from pathlib import Path
 
-import asteria.syntax.surface.concrete as concrete
-import asteria.syntax.surface.abstract as abstract
+import asteria.surface.syntax.concrete as concrete
+import asteria.surface.syntax.abstract as abstract
 
 
 if __name__ == '__main__':

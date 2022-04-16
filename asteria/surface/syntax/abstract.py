@@ -4,7 +4,7 @@
 
 from dataclasses import dataclass
 from lark import Tree
-from typing import List, Optional, TypeVar
+from typing import List, Optional
 
 
 @dataclass

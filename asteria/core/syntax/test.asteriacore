@@ -1,0 +1,152 @@
+id : forall (a : Type). a -> a
+   = \{a} -> \x -> (x : (\(b : Type) -> b) a)
+   ;;
+
+-- data Foo (f : Type) where
+--  | MkFoo (x : forall (g : Type -> Type). (\(a : Type) -> g a) Test$Foo(f) -> Test$Foo(f)) : Test$Foo(f)
+--  ;;
+
+-- module where
+
+data Bool where
+   | False : Test$Bool()
+   | True : Test$Bool()
+   ;;
+
+-- data Nat where
+--    | Zero : Nat
+--    | Suc (n : Nat) : Nat
+--    ;;
+data Nat where
+   | Zero : Test$Nat()
+   | Suc (n : Test$Nat()) : Test$Nat()
+   ;;
+
+--zero : Test$Nat() = Suc(;Zero(;));;
+
+data Interesting (a : Type) where
+   | Wrap (x : a) : Test$Interesting(a)
+   | Wrap2 {b : Type} (x : b) : Test$Interesting(b)
+   | Ze : Test$Interesting(Test$Nat())
+   ;;
+
+f : Test$Interesting(Test$Bool())
+  = Wrap2(Test$Bool();True(;));;
+
+-- (+) : Nat -> Nat -> Nat;;
+-- Zero + n = n;;
+-- Suc m + n = Suc (m + n);;
+(+) : Test$Nat() -> Test$Nat() -> Test$Nat() = \m -> \n ->
+  case m of
+    | Suc(;m2) -> Suc(; Test$(+) m2 (n : Test$Nat())) : Test$Nat()
+    | Zero(;) -> n : Test$Nat()
+    ;;
+
+(+)$helper : Test$Nat() -> Test$Nat() -> Test$Nat() = \m -> \n ->
+  case m of
+    | Zero(;) -> n : Test$Nat()
+    | Suc(;m) -> Suc(; Test$(+)$helper m (n : Test$Nat())) : Test$Nat()
+    ;;
+
+--------------------------------------------------------------------------------
+
+-- module where
+
+-- data Maybe (a : Type) where
+--    | Nothing      : Maybe a
+--    | Just (x : a) : Maybe a
+--    ;;
+data Maybe (a : Type) where
+   | Nothing : Test$Maybe(a)
+   | Just (x : a) : Test$Maybe(a)
+   ;;
+
+jz : Test$Maybe(Test$Nat())
+   = Just(;Zero(;))
+   ;;
+
+--------------------------------------------------------------------------------
+
+-- module
+-- importing
+--   | Test unqualified
+--   | Test unqualified
+-- where
+
+-- data List (a : Type) where
+--    | Nil                        : List a
+--    | Cons (x : a) (xs : List a) : List a
+--    ;;
+data List (a : Type) where
+  | Nil : Test$List(a)
+  | Cons (x : a) (xs : Test$List(a)) : Test$List(a)
+  ;;
+
+-- map : forall (a b : Type). (a -> b) -> List a -> List b;;
+-- map _ Nil = Nil;;
+-- map f (Cons x xs) = Cons (f x) (map f xs);;
+map : forall (a : Type). forall (b : Type). (a -> b) -> Test$List(a) -> Test$List(b)
+  = \{a} -> \{b} -> \f -> \xs ->
+  case xs of
+    | Nil(;) -> Nil(;) : Test$List(b)
+    | Cons(; x, xs) -> Cons(; f x, Test$map {a} {b} f xs) : Test$List(b)
+    ;;
+
+-- lookup : forall (a : Type). Nat -> List a -> Maybe a;;
+-- lookup Zero    (Cons x _)  = Just x;;
+-- lookup (Suc i) (Cons _ xs) = lookup i xs;;
+-- lookup _       _           = Nothing;;
+lookup : forall (a : Type). Test$Nat() -> Test$List(a) -> Test$Maybe(a)
+  = \{a} -> \i -> \xs ->
+  case i | xs of
+    | Zero(;) | Cons(; x, _) -> Just(;x) : Test$Maybe(a)
+    | Suc(;n) | Cons(; _, xs) -> Test$lookup {a} n xs
+    | _ | _ -> Nothing(;) : Test$Maybe(a)
+    ;;
+
+--------------------------------------------------------------------------------
+
+-- module where
+-- class forall (f : Type -> Type). Functor f where
+--   | fmap : forall (a b : Type). (a -> b) -> f a -> f b
+--   ;;
+
+data Functor (f : Type -> Type) where
+   | MkFunctor (fmap : forall (a : Type). forall (b : Type). (a -> b) -> f a -> f b) : Test$Functor(\(a : Type) -> f a)
+   ;;
+
+--------------------------------------------------------------------------------
+
+-- module where
+-- data Unit where Triv : Unit;;
+data Unit where
+  | Triv : Test$Unit()
+  ;;
+
+-- module Test where
+-- data Prod (a b : Type) where Pair (x : a) (y : b) : Prod a b;;
+data Prod (a : Type) (b : Type) where
+  | Pair (x : a) (y : b) : Test$Prod(a,b)
+  ;;
+
+-- module
+-- importing
+--   | Test unqualified
+--   | Test unqualified
+-- where
+-- data LC (a : Type) where
+--    | LCTriv                                          : LC Unit
+--    | LCPair {a b : Type} (x : LC a) (y : LC b)       : LC (Prod a b)
+--    | LCFst {a b : Type} (p : LC (Prod a b))          : LC a
+--    | LCSnd {a b : Type} (p : LC (Prod a b))          : LC b
+--    | LCLam {a b : Type} (f : LC a -> LC b)           : LC (a -> b)
+--    | LCApp {a b : Type} (f : LC (a -> b)) (x : LC a) : LC b
+--    ;;
+data LC (a : Type) where
+  | LCTriv : Test$LC(Test$Unit())
+  | LCPair {a : Type} {b : Type} (x : Test$LC(a)) (y : Test$LC(b)) : Test$LC(Test$Prod(a,b))
+  | LCFst {a : Type} {b : Type} (p : Test$LC(Test$Prod(a,b))) : Test$LC(a)
+  | LCSnd {a : Type} {b : Type} (p : Test$LC(Test$Prod(a,b))) : Test$LC(b)
+  | LCLam {a : Type} {b : Type} (f : Test$LC(a) -> Test$LC(b)) : Test$LC(a -> b)
+  | LCApp {a : Type} {b : Type} (f : Test$LC(a -> b)) (x : Test$LC(a)) : Test$LC(b)
+  ;;

@@ -2,7 +2,7 @@
 _WS: /[\r\n\t ]+/
 %ignore _WS
 _sepby{x, sep}: x (sep x)*
-_sepby0{x, sep}: [x (sep x)*]
+_sepby0{x, sep}: _sepby{x,sep}?
 
 ////////////////  Keywords and Symbols  ////////////////
 
@@ -80,7 +80,7 @@ dotted_module_name: _sepby{CONNAME, _DOT}
 
 module: _MODULE imports _WHERE declarations _DOUBLESEMI?
 
-imports: [_IMPORTING import+]
+imports: (_IMPORTING import+)?
 
 import: _PIPE _import_sort renaming
 
@@ -215,7 +215,7 @@ type_signature: VARNAME _COLON _type _DOUBLESEMI
 
 term_equation: VARNAME argument_patterns guard _EQ _term _DOUBLESEMI
 
-guard: [_DOUBLEPIPE _term]
+guard: (_DOUBLEPIPE _term)?
 
 
 
