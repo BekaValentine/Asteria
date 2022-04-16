@@ -1,30 +1,8 @@
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, cast
 
 from asteria.utils import *
 from asteria.core.syntax.abstract import *
-
-
-# @dataclass
-# class TypeConstructorSignature(object):
-#     parameters: List[Tuple[str, Kind]]
-#
-#     def pretty(self) -> str:
-#         return ' '.join([f'({v} : {k.pretty()})' for v, k in self.parameters])
-
-
-# @dataclass
-# class ConstructorSignature(object):
-#     type_parameters: List[Tuple[str, Kind]]
-#     parameters: List[Tuple[str, Type]]
-#     return_type: Type
-#
-#     def pretty(self) -> str:
-#         return ' '.join([f'{{{v} : {k.pretty()}}}' for v, k in self.type_parameters]) +\
-#                ' ' +\
-#                ' '.join([f'({v} : {k.pretty()})' for v, k in self.parameters]) +\
-#                ' ~> ' +\
-#                self.return_type.pretty()
 
 
 @dataclass
@@ -54,11 +32,8 @@ class Context(object):
     def names(self):
         return list(self.variables.keys())
 
-    def lookup_variable(self, name: str) -> Optional[Type]:
-        if name in self.variables:
-            return self.variables[name]
-        else:
-            return None
+    def lookup_variable(self, name: str) -> Optional[ContextJudgment]:
+        return self.variables.get(name)
 
     def extend(self, names: Dict[str, ContextJudgment]):
         # args2 = {k: self.variables[k] for k in self.variables}
@@ -72,7 +47,7 @@ class Elaborator(object):
     type_constructor_signatures: Dict[DeclaredTypeConstructorName,
                                       TypeConstructorSignature]
     type_constructor_constructors: Dict[DeclaredTypeConstructorName,
-                                        Dict[DeclaredConstructorName, ConstructorSignature]]
+                                        Dict[str, Scope[ConstructorSignature]]]
     term_signatures: Dict[DeclaredTermName, Type]
     term_definitions: Dict[DeclaredTermName, Term]
 
@@ -91,7 +66,8 @@ class Elaborator(object):
 
     def elab_data_decl(self, mods: List[str], decl: DataDeclaration):
         tycon = DeclaredTypeConstructorName(
-            modules=mods, name=decl.name)
+            modules=mods,
+            name=decl.name)
 
         if tycon in self.type_constructor_signatures:
             print(
@@ -99,7 +75,7 @@ class Elaborator(object):
             exit()
 
         print(
-            f'Adding signature for type constructor {tycon.pretty()} {decl.signature.pretty()}')
+            f'Type constructor {tycon.pretty()} {decl.signature.pretty()}')
 
         self.type_constructor_signatures[tycon] = decl.signature
         self.type_constructor_constructors[tycon] = {}
@@ -113,56 +89,64 @@ class Elaborator(object):
                 f'ERROR: Constructor {condecl.name} is already defined for type constructor {tycon.pretty()}')
             exit()
 
-        ctx = Context({tvk.tyvar: HasKind(tvk.kind)
-                      for tvk in tycon_sig.parameters})
+        new_tycon_param_names, tycon_level_sig = condecl.signature.open([])
+
+        ctx = Context({typaram: HasKind(tvk.kind)
+                      for typaram, tvk in zip(new_tycon_param_names, tycon_sig.parameters)})
+
         previous_names = []
 
-        for type_parameter in condecl.type_parameters:
-            if type_parameter.tyvar in previous_names:
+        for type_parameter in tycon_level_sig.term_signature.names:
+            if type_parameter in previous_names:
                 print(
-                    f'ERROR: Repeated variable {type_parameter.tyvar} in signature for constructor {condecl.name}')
+                    f'ERROR: Repeated variable {type_parameter} in signature for constructor {condecl.name}')
                 exit()
-            previous_names.append(type_parameter.tyvar)
-            ctx.variables[type_parameter.tyvar] = HasKind(type_parameter.kind)
-        for parameter in condecl.parameters:
-            if parameter.var in previous_names:
+            previous_names.append(type_parameter)
+
+        new_typaram_names, termsig = tycon_level_sig.term_signature.open(
+            ctx.names())
+
+        ctx = ctx.extend({
+            v: HasKind(k)
+            for v, k in zip(new_typaram_names, tycon_level_sig.type_parameters_kinds)
+        })
+
+        for param, type in termsig.parameters:
+            if param in previous_names:
                 print(
-                    f'ERROR: Repeated variable {parameter.var} in signature for constructor {condecl.name}')
+                    f'ERROR: Repeated variable {param} in signature for constructor {condecl.name}')
                 exit()
-            previous_names.append(parameter.var)
-            k = self.synth_type(ctx, parameter.type)
+            previous_names.append(param)
+            k = self.synth_type(ctx, type)
             if k != TypeKind():
                 print(
-                    f'ERROR: Found a constructor parameter with an incorrectly kinded type: {parameter.var} in signature for constructor {condecl.name}')
+                    f'ERROR: Found a constructor parameter with an incorrectly kinded type: {param} in signature for constructor {condecl.name}')
                 print(f'ERROR: Expected kind: {TypeKind().pretty()}')
                 print(f'ERROR: Found kind: {k.pretty()}')
                 exit()
-            ctx.variables[parameter.var] = HasType(parameter.type)
 
-        k = self.synth_type(ctx, condecl.return_type)
+        ctx = ctx.extend({v: HasType(t) for v, t in termsig.parameters})
+
+        k = self.synth_type(ctx, termsig.return_type)
         if k != TypeKind():
             print(
-                f'ERROR: Found a constructor declaration that returns an incorrectly kinded type: {condecl.return_type.pretty()} in signature for constructor {condecl.name}')
+                f'ERROR: Found a constructor declaration that returns an incorrectly kinded type: {termsig.return_type.pretty()} in signature for constructor {condecl.name}')
             print(f'ERROR: Expected kind: {TypeKind().pretty()}')
             print(f'ERROR: Found kind: {k.pretty()}')
             exit()
 
-        if not isinstance(condecl.return_type, ConstructorType) or condecl.return_type.name != tycon:
+        if not isinstance(termsig.return_type, ConstructorType) or termsig.return_type.name != tycon:
             print(
-                f'ERROR: Found a constructor declaration that returns an invalid type: {condecl.return_type.pretty()} in signature for constructor {condecl.name}')
+                f'ERROR: Found a constructor declaration that returns an invalid type: {termsig.return_type.pretty()} in signature for constructor {condecl.name}')
             print(
                 f'ERROR: Expected a constructor type using the type constructor {tycon.pretty()}')
             exit()
 
-        consig = ConstructorSignature(
-            type_parameters=[(p.tyvar, p.kind)
-                             for p in condecl.type_parameters],
-            parameters=[(p.var, p.type) for p in condecl.parameters],
-            return_type=condecl.return_type)
-
         print(
-            f'Adding signature for constructor {DeclaredConstructorName(tycon,condecl.name).pretty()} : {consig.pretty()}')
-        self.type_constructor_constructors[tycon][condecl.name] = consig
+            f'Term constructor {DeclaredConstructorName(tycon,condecl.name).pretty()} : {tycon_level_sig.pretty()}')
+        self.type_constructor_constructors[tycon][condecl.name] = condecl.signature
+
+        return True
 
     def elab_term_decl(self, mods: List[str], termdecl: TermDeclaration):
 
@@ -177,15 +161,15 @@ class Elaborator(object):
         name = DeclaredTermName(mods, termdecl.name)
 
         print(
-            f'Adding signature for term name {name.pretty()} : {termdecl.type.pretty()}')
-        self.term_signatures[name] = HasType(termdecl.type)
+            f'Term name {name.pretty()} : {termdecl.type.pretty()}')
+        self.term_signatures[name] = termdecl.type
 
         self.check_term(Context({}), termdecl.type, termdecl.definition)
 
         self.term_definitions[name] = termdecl.definition
 
-    def synth_type(self, ctx: Context, t: Type) -> bool:
-        if isinstance(t, Variable):
+    def synth_type(self, ctx: Context, t: Type) -> Kind:
+        if isinstance(t, VariableType):
             if t.name not in ctx.variables:
                 print(f'ERROR: Type variable not in scope: {t.pretty()}')
                 exit()
@@ -193,7 +177,8 @@ class Elaborator(object):
                 print(
                     f'ERROR: Cannot synthesize a kind for a non-type variable: {t.pretty()}')
                 exit()
-            return ctx.variables[t.name].kind
+
+            return cast(HasKind, ctx.variables[t.name]).kind
         elif isinstance(t, ConstructorType):
             if t.name not in self.type_constructor_signatures:
                 print(f'ERROR: Unknown type constructor: {t.name.pretty()}')
@@ -266,9 +251,8 @@ class Elaborator(object):
 
             return k.return_kind
         else:
-            flag(type(t))
-            flag(t)
             todo()
+            raise
 
     def check_term(self, ctx: Context, t: Type, m: Term) -> None:
         if isinstance(t, FunctionType) and isinstance(m, LambdaTerm):
@@ -286,38 +270,26 @@ class Elaborator(object):
                 print(
                     f'ERROR: The type constructor {t.name.pretty()} does not have a constructor named {m.constructor}')
                 exit()
-            consig = self.type_constructor_constructors[t.name][m.constructor]
-            if len(m.type_arguments) != len(consig.type_parameters):
+
+            new_tycon_param_names, consig = self.type_constructor_constructors[t.name][m.constructor].open(
+                ctx.names())
+
+            ctx = ctx.extend({
+                v: HasTypeValue(t)
+                for v, t in zip(new_tycon_param_names, t.arguments)
+            })
+
+            if len(m.type_arguments) != len(consig.type_parameters_kinds):
                 print(
                     f'ERROR: Incorrect number of type arguments in constructor term {m.pretty()}')
-                print(f'Expected {len(consig.type_parameters)}')
+                print(f'Expected {len(consig.type_parameters_kinds)}')
                 print(f'Found {len(m.type_arguments)}')
                 exit()
-            if len(m.arguments) != len(consig.parameters):
-                print(
-                    f'ERROR: Incorrect number of arguments in constructor term {m.pretty()}')
-                print(f'Expected {len(consig.parameters)}')
-                print(f'Found {len(m.arguments)}')
-                exit()
 
-            # freshen the term constructor's type parameter variables first
-            old_type_param_names = [n for n, _ in consig.type_parameters]
-            new_type_param_names = fresh_variables(
-                ctx.names(), old_type_param_names)
+            new_typaram_names, termsig = consig.term_signature.open(
+                ctx.names())
 
-            # then freshen the type constructor's parameter variables
-            old_tycon_param_names = [
-                tvk.tyvar for tvk in self.type_constructor_signatures[t.name].parameters]
-            new_tycon_param_names = fresh_variables(
-                ctx.names() + new_type_param_names, old_tycon_param_names)
-
-            # build a renaming for all the parts
-            param_renaming = {old: new
-                              for old, new in zip(old_type_param_names, new_type_param_names)} |\
-                             {old: new
-                              for old, new in zip(old_tycon_param_names, new_tycon_param_names)}
-
-            for (_, tyargkind), tyarg in zip(consig.type_parameters, m.type_arguments):
+            for tyargkind, tyarg in zip(consig.type_parameters_kinds, m.type_arguments):
                 k = self.synth_type(ctx, tyarg)
                 if tyargkind != k:
                     print(
@@ -326,17 +298,24 @@ class Elaborator(object):
                     print(f'ERROR: Found kind: {k.pretty()}')
                     exit()
 
-            ctx2 = ctx.\
-                extend({tyvar: HasTypeValue(tyval) for tyvar, tyval in zip(
-                    new_tycon_param_names, t.arguments)}).\
-                extend({tyvar: HasTypeValue(tyval) for tyvar, tyval in zip(
-                    new_type_param_names, m.type_arguments)})
-            for (_, argty), arg in zip(consig.parameters, m.arguments):
-                self.check_term(ctx2, eval_type(
-                    ctx2, argty.rename(param_renaming)), arg)
+            ctx = ctx.extend({
+                tyvar: HasTypeValue(tyval)
+                for tyvar, tyval in zip(new_typaram_names, m.type_arguments)
+            })
 
-            found_ty = eval_type(
-                ctx2, consig.return_type.rename(param_renaming))
+            if len(m.arguments) != len(termsig.parameters):
+                print(
+                    f'ERROR: Incorrect number of arguments in constructor term {m.pretty()}')
+                print(
+                    f'Expected {len(termsig.parameters)}')
+                print(f'Found {len(m.arguments)}')
+                exit()
+
+            for (_, argty), arg in zip(termsig.parameters, m.arguments):
+                self.check_term(ctx, eval_type(
+                    ctx, argty), arg)
+
+            found_ty = eval_type(ctx, termsig.return_type)
             if found_ty != t:
                 print(
                     f'ERROR: Constructor term does not inhabit given type: {m.pretty()}')
@@ -354,7 +333,7 @@ class Elaborator(object):
                 exit()
 
     def synth_term(self, ctx: Context, m: Term) -> Type:
-        if isinstance(m, Variable):
+        if isinstance(m, VariableTerm):
             if m.name not in ctx.variables:
                 print(f'ERROR: Found an unbound variable: {m.pretty()}')
                 exit()
@@ -362,12 +341,12 @@ class Elaborator(object):
                 print(
                     f'ERROR: Variable {m.pretty()} is used as a term variable but is declared as a type variable.')
                 exit()
-            return ctx.variables[m.name].type
+            return cast(HasType, ctx.variables[m.name]).type
         elif isinstance(m, DeclaredTermNameTerm):
             if m.name not in self.term_signatures:
                 print(f'ERROR: Unknown declared term name: {m.name.pretty()}')
                 exit()
-            return self.term_signatures[m.name].type
+            return self.term_signatures[m.name]
         elif isinstance(m, TypeAnnotationTerm):
             k = self.synth_type(ctx, m.type)
             if k != TypeKind():
@@ -439,6 +418,7 @@ class Elaborator(object):
             return uniqs[0]
         else:
             todo()
+            raise
 
     def synth_clause(self, ctx: Context, pat_ts: List[Type], cls: CaseClause) -> Type:
         # ensure non-overlapping names
@@ -458,52 +438,63 @@ class Elaborator(object):
             print(f'ERROR: Repeated: {" ".join(repeated)}')
             exit()
 
-        new_bindings = {v: t
+        new_bindings = {v: cast(ContextJudgment, j)
                         for pat_ty, pat in list(zip(pat_ts, cls.patterns))
-                        for v, t in self.check_pattern(ctx, pat_ty, pat).items()}
+                        for v, j in self.check_pattern(ctx, pat_ty, pat).items()}
 
         return self.synth_term(ctx.extend(new_bindings), cls.body.body)
 
-    def check_pattern(self, ctx: Context, t: Type, pat: Pattern) -> Dict[str, Type]:
+    def check_pattern(self, ctx: Context, t: Type, pat: Pattern) -> Dict[str, ContextJudgment]:
 
         if isinstance(pat, CapturedVariablePattern):
             return {pat.var: HasType(t)}
         elif isinstance(pat, WildcardVariablePattern):
             return {}
-        elif isinstance(pat, ConstructorPattern):
+        elif isinstance(t, ConstructorType) and isinstance(pat, ConstructorPattern):
 
             if pat.constructor not in self.type_constructor_constructors[t.name]:
                 print(
                     f'ERROR: The type constructor {t.name.pretty()} does not have a constructor named {pat.constructor}')
                 exit()
-            consig = self.type_constructor_constructors[t.name][pat.constructor]
-            if len(pat.type_arguments) != len(consig.type_parameters):
+
+            new_tycon_params, consig = self.type_constructor_constructors[t.name][pat.constructor].open(
+                ctx.names())
+
+            ctx = ctx.extend({
+                v: HasTypeValue(t)
+                for v, t in zip(new_tycon_params, t.arguments)
+            })
+
+            new_type_params, termsig = consig.term_signature.open(ctx.names())
+
+            if len(pat.type_arguments) != len(consig.type_parameters_kinds):
                 print(
                     f'ERROR: Incorrect number of type arguments in constructor pattern {pat.pretty()}')
-                print(f'Expected {len(consig.type_parameters)}')
+                print(f'Expected {len(consig.type_parameters_kinds)}')
                 print(f'Found {len(pat.type_arguments)}')
                 exit()
-            if len(pat.arguments) != len(consig.parameters):
+
+            ctx = ctx.extend({
+                v: HasKind(k)
+                for v, k in zip(new_type_params, consig.type_parameters_kinds)
+            })
+
+            if len(pat.arguments) != len(termsig.parameters):
                 print(
                     f'ERROR: Incorrect number of arguments in constructor pattern {pat.pretty()}')
-                print(f'Expected {len(consig.parameters)}')
+                print(f'Expected {len(termsig.parameters)}')
                 print(f'Found {len(pat.arguments)}')
                 exit()
 
-            aggregate_bindings = {v: HasKind(k)
-                                  for v, (_, k) in zip(pat.type_arguments, consig.type_parameters)}
+            aggregate_bindings = {tvp.tyvar: cast(ContextJudgment, HasKind(k))
+                                  for tvp, k in zip(pat.type_arguments, consig.type_parameters_kinds)
+                                  if isinstance(tvp, CapturedTypeVariablePattern)}
 
-            tyconsigzipped = list(zip(
-                self.type_constructor_signatures[t.name].parameters, t.arguments))
-            ctx2 = ctx.\
-                extend({tvk.tyvar: HasTypeValue(tyval) for tvk, tyval in tyconsigzipped}).\
-                extend(aggregate_bindings)
-
-            for (_, argty), arg in zip(consig.parameters, pat.arguments):
+            for (_, argty), arg in zip(termsig.parameters, pat.arguments):
                 aggregate_bindings |= self.check_pattern(
-                    ctx2, eval_type(ctx2, argty), arg)
+                    ctx, eval_type(ctx, argty), arg)
 
-            found_ty = eval_type(ctx2, consig.return_type)
+            found_ty = eval_type(ctx, termsig.return_type)
             if found_ty != t:
                 print(
                     f'ERROR: Constructor pattern does not inhabit given type: {pat.pretty()}')
@@ -513,12 +504,16 @@ class Elaborator(object):
 
             return aggregate_bindings
 
+        else:
+            todo()
+            raise
+
 
 def eval_type(ctx: Context, t: Type):
-    if isinstance(t, Variable):
+    if isinstance(t, VariableType):
         if t.name not in ctx.variables or not isinstance(ctx.variables[t.name], HasTypeValue):
             return t
-        return ctx.variables[t.name].type_value
+        return cast(HasTypeValue, ctx.variables[t.name]).type_value
     elif isinstance(t, ConstructorType):
         return ConstructorType(
             name=t.name,

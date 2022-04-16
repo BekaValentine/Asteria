@@ -1,5 +1,5 @@
 from dataclasses import dataclass, fields
-from typing import List
+from typing import Dict, List, TypeVar, Generic, Tuple, cast
 
 
 def todo():
@@ -22,7 +22,7 @@ def fresh_variable(old: List[str], name: str):
     return proposed
 
 
-def fresh_variables(olds: List[str], names: List[str]):
+def fresh_variables(olds: List[str], names: List[str]) -> List[str]:
     news = []
     for name in names:
         new = fresh_variable(olds, name)
@@ -46,38 +46,31 @@ class Syntax(object):
     def rename_value(x, renaming):
         if isinstance(x, Syntax):
             return x.rename(renaming)
+        elif isinstance(x, Scope):
+            return x.rename(renaming)
         elif isinstance(x, list):
             return [Syntax.rename_value(y, renaming) for y in x]
+        elif isinstance(x, tuple):
+            return tuple(Syntax.rename_value(list(x), renaming))
         else:
+            # flag('Falling through')
+            # flag(x)
             return x
 
 
-# @dataclass
-# class Variable(Syntax):
-#     name: object
-#
-#     def pretty(self, prec=None) -> str:
-#         return f'{self.name}'
-#
-#     def rename(self, renaming):
-#         if renaming == {}:
-#             return self
-#         if self.name in renaming:
-#             return Variable(renaming[self.name])
-#         else:
-#             return self
+T = TypeVar('T')
 
 
 @dataclass
-class Scope(Syntax):
+class Scope(Generic[T]):
     names: List[str]
-    body: Syntax
+    body: T
 
-    def rename(self, renaming):
+    def rename(self, renaming: Dict[str, str]):
         if renaming == {}:
             return self
-        return Scope(self.names, self.body.rename({k: v for k, v in renaming.items() if k not in self.names}))
+        return Scope(self.names, cast(T, cast(Syntax, self.body).rename({k: v for k, v in renaming.items() if k not in self.names})))
 
-    def open(self, free_names):
+    def open(self, free_names: List[str]) -> Tuple[List[str], T]:
         new_names = fresh_variables(free_names, self.names)
-        return (new_names, self.body.rename(dict(zip(self.names, new_names))))
+        return (new_names, cast(T, cast(Syntax, self.body).rename(dict(zip(self.names, new_names)))))
