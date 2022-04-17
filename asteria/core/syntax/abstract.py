@@ -651,23 +651,8 @@ class InstantiationTerm(Term):
 
 
 @dataclass
-class Guard(Core):
-    term: Optional[Scope]
-
-
-def Guard_from_cst(vars: List[str], cst: Tree) -> Guard:
-    if len(cst.children) == 0:
-        return Guard(term=None)
-    else:
-        return Guard(term=Scope(
-            names=vars,
-            body=Term_from_cst(cst.children[0])))
-
-
-@dataclass
 class CaseClause(Core):
     patterns: List[Pattern]
-    guard: Guard
     body: Scope[Term]
 
 
@@ -676,8 +661,7 @@ def CaseClause_from_cst(cst: Tree) -> CaseClause:
     bound_vars = [v for pat in pats for v in pat.captured_variables()]
     return CaseClause(
         patterns=pats,
-        guard=Guard_from_cst(bound_vars, cst.children[1]),
-        body=Scope(bound_vars, Term_from_cst(cst.children[2])))
+        body=Scope(bound_vars, Term_from_cst(cst.children[1])))
 
 
 @dataclass

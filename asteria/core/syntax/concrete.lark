@@ -20,7 +20,6 @@ _AT:         "@"
 _DOT:        "."
 _COMMA:      ","
 _PIPE:       "|"
-_DOUBLEPIPE: "||"
 _LPAR:       "("
 _RPAR:       ")"
 _LBRACE:     "{"
@@ -270,10 +269,8 @@ _case_scrutinee: _term
 
 case_body: case_clause*
 
-// CaseClause Cls ::=  | Pat* || G -> N  (Case Clause)
-case_clause: _PIPE patterns guard _ARROW _term
-
-guard: (_DOUBLEPIPE _term)?
+// CaseClause Cls ::=  | Pat+ -> N  (Case Clause)
+case_clause: _PIPE patterns _ARROW _term
 
 patterns: _sepby{_pattern,_PIPE}
 
