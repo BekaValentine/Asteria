@@ -1,5 +1,6 @@
 from dataclasses import dataclass, fields
-from typing import Dict, List, TypeVar, Generic, Tuple, cast
+from typing import Dict, List, TypeVar, Generic, Tuple, Optional, cast
+import lark
 
 
 def todo():
@@ -31,8 +32,16 @@ def fresh_variables(olds: List[str], names: List[str]) -> List[str]:
     return news
 
 
-@dataclass
+@dataclass(eq=False)
 class Syntax(object):
+    source: Optional[lark.Tree]
+
+    def __eq__(self, other) -> bool:
+        return type(self) == type(other) and all([
+            getattr(self, field.name) == getattr(other, field.name)
+            for field in fields(self)
+            if field.name != 'source'
+        ])
 
     def pretty(self, prec=None) -> str:
         return f'(unknown-syntax {self})'

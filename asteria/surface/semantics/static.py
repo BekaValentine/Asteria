@@ -4,7 +4,6 @@
 
 # During typechecking, the term in the surface language is elaborated into a term in the core language, which is fully explicit form that has no implicit arguments anywhere and which lacks various user-friendly conveniences.
 
-@dataclass
 class Elaborator(object):
 
     def check(context: Context, type: Surface.Type, term: Surface.Term) -> Pair[Core.Term, Core.Type]:

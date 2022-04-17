@@ -7,14 +7,14 @@ from typing import List, Optional, Tuple, cast
 from asteria.utils import *
 
 
-@dataclass
+@dataclass(eq=False)
 class Core(Syntax):
     pass
 
 ################  Kinds  ################
 
 
-@dataclass
+@dataclass(eq=False)
 class Kind(Core):
 
     def pretty(self, prec=None) -> str:
@@ -24,10 +24,11 @@ class Kind(Core):
 def Kind_from_cst(cst: Tree) -> Kind:
 
     if cst.data == 'type_kind':
-        return TypeKind()
+        return TypeKind(source=cst)
 
     elif cst.data == 'function_kind':
         return FunctionKind(
+            source=cst,
             argument_kind=Kind_from_cst(cst.children[0]),
             return_kind=Kind_from_cst(cst.children[1]))
 
@@ -37,7 +38,7 @@ def Kind_from_cst(cst: Tree) -> Kind:
 # TypeKind()
 
 
-@dataclass
+@dataclass(eq=False)
 class TypeKind(Kind):
 
     def pretty(self, prec=None) -> str:
@@ -46,7 +47,7 @@ class TypeKind(Kind):
 
 # Type -> Type
 # FunctionKind(TypeKind(), TypeKind())
-@dataclass
+@dataclass(eq=False)
 class FunctionKind(Kind):
     argument_kind: Kind
     return_kind: Kind
@@ -163,7 +164,7 @@ def DeclaredTermName_from_cst(cst: Tree) -> DeclaredTermName:
 
 # a : Type
 # TyVarkinding("a", TypeKind())
-@dataclass
+@dataclass(eq=False)
 class TyVarKinding(Core):
     tyvar: str
     kind: Kind
@@ -171,11 +172,12 @@ class TyVarKinding(Core):
 
 def TyVarKinding_from_cst(cst: Tree) -> TyVarKinding:
     return TyVarKinding(
+        source=cst,
         tyvar=cast(Token, cst.children[0]).value,
         kind=Kind_from_cst(cst.children[1]))
 
 
-@dataclass
+@dataclass(eq=False)
 class Type(Core):
     pass
 
@@ -183,21 +185,26 @@ class Type(Core):
 def Type_from_cst(cst: Tree) -> Type:
 
     if cst.data == 'variable_type':
-        return VariableType(cast(Token, cst.children[0]).value)
+        return VariableType(
+            source=cst,
+            name=cast(Token, cst.children[0]).value)
 
     elif cst.data == 'constructor_type':
         return ConstructorType(
+            source=cst,
             name=DeclaredTypeConstructorName_from_cst(cst.children[0]),
             arguments=[Type_from_cst(arg) for arg in cst.children[1].children])
 
     elif cst.data == 'function_type':
         return FunctionType(
+            source=cst,
             argument_type=Type_from_cst(cst.children[0]),
             return_type=Type_from_cst(cst.children[1]))
 
     elif cst.data == 'forall_type':
         tvk = TyVarKinding_from_cst(cst.children[0])
         return ForallType(
+            source=cst,
             tyvar_kind=tvk.kind,
             scope=Scope(
                 names=[tvk.tyvar],
@@ -206,6 +213,7 @@ def Type_from_cst(cst: Tree) -> Type:
     elif cst.data == 'lambda_type':
         tvk = TyVarKinding_from_cst(cst.children[0])
         return LambdaType(
+            source=cst,
             tyvar_kind=tvk.kind,
             body=Scope(
                 names=[tvk.tyvar],
@@ -213,6 +221,7 @@ def Type_from_cst(cst: Tree) -> Type:
 
     elif cst.data == 'application_type':
         return ApplicationType(
+            source=cst,
             function=Type_from_cst(cst.children[0]),
             argument=Type_from_cst(cst.children[1]))
 
@@ -224,7 +233,7 @@ def Type_from_cst(cst: Tree) -> Type:
 
 # x
 # VariableType("")
-@dataclass
+@dataclass(eq=False)
 class VariableType(Type):
     name: str
 
@@ -235,14 +244,16 @@ class VariableType(Type):
         if renaming == {}:
             return self
         if self.name in renaming:
-            return VariableType(renaming[self.name])
+            return VariableType(
+                source=self.source,
+                name=renaming[self.name])
         else:
             return self
 
 
 # Data.Pair$Pair(a;b)
 # ConstructorType("Pair", [VariableType("a"), VariableType("b")])
-@dataclass
+@dataclass(eq=False)
 class ConstructorType(Type):
     name: DeclaredTypeConstructorName
     arguments: List[Type]
@@ -253,7 +264,7 @@ class ConstructorType(Type):
 
 # a -> b
 # FunctionType(VariableType("a"), VariableType("b"))
-@dataclass
+@dataclass(eq=False)
 class FunctionType(Type):
     argument_type: Type
     return_type: Type
@@ -268,7 +279,7 @@ class FunctionType(Type):
 
 # forall (a : Type). a
 # ForallType(TypeKind(), Scope(["a"], VariableType("a")))
-@dataclass
+@dataclass(eq=False)
 class ForallType(Type):
     tyvar_kind: Kind
     scope: Scope[Type]
@@ -283,7 +294,7 @@ class ForallType(Type):
 
 # \(a : Type) -> a
 # LambdaType(TypeKind(), Scope(["a"], VariableType("a")))
-@dataclass
+@dataclass(eq=False)
 class LambdaType(Type):
     tyvar_kind: Kind
     body: Scope[Type]
@@ -298,7 +309,7 @@ class LambdaType(Type):
 
 # f $ a
 # ApplicationType(VariableType("f"), VariableType("a"))
-@dataclass
+@dataclass(eq=False)
 class ApplicationType(Type):
     function: Type
     argument: Type
@@ -313,7 +324,7 @@ class ApplicationType(Type):
 
 ################  Declarations  ################
 
-@dataclass
+@dataclass(eq=False)
 class Declaration(Core):
     pass
 
@@ -323,12 +334,15 @@ def Declaration_from_cst(cst: Tree) -> Declaration:
         params = [TyVarKinding_from_cst(tvk)
                   for tvk in cst.children[1].children]
         return DataDeclaration(
+            source=cst,
             name=cast(Token, cst.children[0]).value,
             signature=TypeConstructorSignature(
+                source=None,
                 parameters=params),
             constructors=[ConstructorDeclaration_from_cst([tvk.tyvar for tvk in params], condecl) for condecl in cst.children[2].children])
     elif cst.data == 'term_declaration':
         return TermDeclaration(
+            source=cst,
             name=TermNameWithSubnames_from_cst(cst.children[0]),
             type=Type_from_cst(cst.children[1]),
             definition=Term_from_cst(cst.children[2]))
@@ -339,7 +353,7 @@ def Declaration_from_cst(cst: Tree) -> Declaration:
 ################  Data Declarations  ################
 
 
-@dataclass
+@dataclass(eq=False)
 class ConstructorDeclTypeArgument(Core):
     tyvar: str
     kind: Kind
@@ -347,11 +361,12 @@ class ConstructorDeclTypeArgument(Core):
 
 def ConstructorDeclTypeArgument_from_cst(cst: Tree) -> ConstructorDeclTypeArgument:
     return ConstructorDeclTypeArgument(
+        source=cst,
         tyvar=cast(Token, cst.children[0]).value,
         kind=Kind_from_cst(cst.children[1]))
 
 
-@dataclass
+@dataclass(eq=False)
 class ConstructorDeclArgument(Core):
     var: str
     type: Type
@@ -359,17 +374,18 @@ class ConstructorDeclArgument(Core):
 
 def ConstructorDeclArgument_from_cst(cst: Tree) -> ConstructorDeclArgument:
     return ConstructorDeclArgument(
+        source=cst,
         var=cast(Token, cst.children[0]).value,
         type=Type_from_cst(cst.children[1]))
 
 
-@dataclass
+@dataclass(eq=False)
 class ConstructorTermSignature(Core):
     parameters: List[Tuple[str, Type]]
     return_type: Type
 
 
-@dataclass
+@dataclass(eq=False)
 class ConstructorSignature(Core):
     type_parameters_kinds: List[Kind]
     term_signature: Scope[ConstructorTermSignature]
@@ -384,7 +400,7 @@ class ConstructorSignature(Core):
 
 
 # constructor Data.Pair$Pair$MkPair {a : Type} {b : Type} (x : a) (y : b) : Data.Pair$Pair(a;b);;
-@dataclass
+@dataclass(eq=False)
 class ConstructorDeclaration(Core):
     name: str
     signature: Scope[ConstructorSignature]
@@ -397,19 +413,22 @@ def ConstructorDeclaration_from_cst(tycon_params: List[str], cst: Tree) -> Const
         param) for param in cst.children[2].children]
 
     return ConstructorDeclaration(
+            source=cst,
             name=cast(Token, cst.children[0]).value,
             signature=Scope(
                 names=tycon_params,
                 body=ConstructorSignature(
+                    source=None,
                     type_parameters_kinds=[tp.kind for tp in type_params],
                     term_signature=Scope(
                         names=[tp.tyvar for tp in type_params],
                         body=ConstructorTermSignature(
+                            source=None,
                             parameters=[(p.var, p.type) for p in params],
                             return_type=Type_from_cst(cst.children[3]))))))
 
 
-@dataclass
+@dataclass(eq=False)
 class TypeConstructorSignature(Core):
     parameters: List[TyVarKinding]
 
@@ -418,7 +437,7 @@ class TypeConstructorSignature(Core):
 
 
 # datatype Data.Pair$Pair (a : Type) (b : Type);;
-@dataclass
+@dataclass(eq=False)
 class DataDeclaration(Declaration):
     name: str
     signature: TypeConstructorSignature
@@ -428,7 +447,7 @@ class DataDeclaration(Declaration):
 ################  Patterns  ################
 
 
-@dataclass
+@dataclass(eq=False)
 class TypeVariablePattern(Core):
 
     def captured_variables(self) -> List[str]:
@@ -437,16 +456,18 @@ class TypeVariablePattern(Core):
 
 def TypeVariablePattern_from_cst(cst: Tree) -> TypeVariablePattern:
     if cst.data == 'variable_type_pattern':
-        return CapturedTypeVariablePattern(tyvar=cast(Token, cst.children[0]).value)
+        return CapturedTypeVariablePattern(
+            source=cst,
+            tyvar=cast(Token, cst.children[0]).value)
     elif cst.data == 'wildcard_type_pattern':
-        return WildcardTypeVariablePattern()
+        return WildcardTypeVariablePattern(source=cst)
     raise
 
 # a
 # CapturedTypeVariablePattern("a")
 
 
-@dataclass
+@dataclass(eq=False)
 class CapturedTypeVariablePattern(TypeVariablePattern):
     tyvar: str
 
@@ -457,14 +478,14 @@ class CapturedTypeVariablePattern(TypeVariablePattern):
 # WildcardTypeVariablePattern()
 
 
-@dataclass
+@dataclass(eq=False)
 class WildcardTypeVariablePattern(TypeVariablePattern):
 
     def captured_variables(self) -> List[str]:
         return []
 
 
-@dataclass
+@dataclass(eq=False)
 class Pattern(Core):
 
     def captured_variables(self) -> List[str]:
@@ -473,13 +494,16 @@ class Pattern(Core):
 
 def Pattern_from_cst(cst: Tree) -> Pattern:
     if cst.data == 'variable_pattern':
-        return CapturedVariablePattern(var=cast(Token, cst.children[0]).value)
+        return CapturedVariablePattern(
+            source=cst,
+            var=cast(Token, cst.children[0]).value)
 
     elif cst.data == 'wildcard_pattern':
-        return WildcardVariablePattern()
+        return WildcardVariablePattern(source=cst)
 
     elif cst.data == 'constructor_pattern':
         return ConstructorPattern(
+            source=cst,
             constructor=cast(Token, cst.children[0]).value,
             type_arguments=[TypeVariablePattern_from_cst(
                 pat) for pat in cst.children[1].children],
@@ -489,7 +513,7 @@ def Pattern_from_cst(cst: Tree) -> Pattern:
 
 # x
 # CapturedVariablePattern("x")
-@dataclass
+@dataclass(eq=False)
 class CapturedVariablePattern(Pattern):
     var: str
 
@@ -500,7 +524,7 @@ class CapturedVariablePattern(Pattern):
 # WildcardVariablePattern()
 
 
-@dataclass
+@dataclass(eq=False)
 class WildcardVariablePattern(Pattern):
 
     def captured_variables(self) -> List[str]:
@@ -509,7 +533,7 @@ class WildcardVariablePattern(Pattern):
 
 # Cons(x; xs)
 # ConstructorPattern("Cons", [VariablePattern("x", VariablePattern("xs")])
-@dataclass
+@dataclass(eq=False)
 class ConstructorPattern(Pattern):
     constructor: str
     type_arguments: List[TypeVariablePattern]
@@ -522,7 +546,7 @@ class ConstructorPattern(Pattern):
 
 ################  Terms  ################
 
-@dataclass
+@dataclass(eq=False)
 class Term(Core):
     pass
 
@@ -530,40 +554,50 @@ class Term(Core):
 def Term_from_cst(cst: Tree) -> Term:
 
     if cst.data == 'variable_term':
-        return VariableTerm(cast(Token, cst.children[0]).value)
+        return VariableTerm(
+            source=cst,
+            name=cast(Token, cst.children[0]).value)
 
     elif cst.data == 'declared_term':
-        return DeclaredTermNameTerm(name=DeclaredTermName_from_cst(cst.children[0]))
+        return DeclaredTermNameTerm(
+            source=cst,
+            name=DeclaredTermName_from_cst(cst.children[0]))
 
     elif cst.data == 'type_annotation_term':
         return TypeAnnotationTerm(
+            source=cst,
             term=Term_from_cst(cst.children[0]),
             type=Type_from_cst(cst.children[1]))
 
     elif cst.data == 'lambda_term':
         return LambdaTerm(
+            source=cst,
             body=Scope(
                 names=[cast(Token, cst.children[0]).value],
                 body=Term_from_cst(cst.children[1])))
 
     elif cst.data == 'application_term':
         return ApplicationTerm(
+            source=cst,
             function=Term_from_cst(cst.children[0]),
             argument=Term_from_cst(cst.children[1]))
 
     elif cst.data == 'abstraction_term':
         return AbstractionTerm(
+            source=cst,
             body=Scope(
                 names=[cast(Token, cst.children[0]).value],
                 body=Term_from_cst(cst.children[1])))
 
     elif cst.data == 'instantiation_term':
         return InstantiationTerm(
+            source=cst,
             function=Term_from_cst(cst.children[0]),
             argument=Type_from_cst(cst.children[1]))
 
     elif cst.data == 'constructor_term':
         return ConstructorTerm(
+            source=cst,
             constructor=cast(Token, cst.children[0]).value,
             type_arguments=[Type_from_cst(ty)
                             for ty in cst.children[1].children],
@@ -571,6 +605,7 @@ def Term_from_cst(cst: Tree) -> Term:
 
     elif cst.data == 'case_term':
         return CaseTerm(
+            source=cst,
             scrutinees=[Term_from_cst(tm) for tm in cst.children[0].children],
             clauses=[CaseClause_from_cst(cls) for cls in cst.children[1].children])
 
@@ -582,7 +617,7 @@ def Term_from_cst(cst: Tree) -> Term:
 
 # x
 # VariableTerm("x")
-@dataclass
+@dataclass(eq=False)
 class VariableTerm(Term):
     name: str
 
@@ -600,20 +635,20 @@ class VariableTerm(Term):
 
 # x : a
 # AnnotationTerm(VariableTerm("x"), VariableType("a"))
-@dataclass
+@dataclass(eq=False)
 class TypeAnnotationTerm(Term):
     term: Term
     type: Type
 
 
-@dataclass
+@dataclass(eq=False)
 class DeclaredTermNameTerm(Term):
     name: DeclaredTermName
 
 
 # Pair(x;y)
 # ConstructorTerm("Pair", [VariableTerm("x"), VariableTerm("y")])
-@dataclass
+@dataclass(eq=False)
 class ConstructorTerm(Term):
     constructor: str
     type_arguments: List[Type]
@@ -622,14 +657,14 @@ class ConstructorTerm(Term):
 
 # \x -> x
 # LambdaTerm(Scope(["x"], VariableTerm("x")))
-@dataclass
+@dataclass(eq=False)
 class LambdaTerm(Term):
     body: Scope[Term]
 
 
 # f x
 # ApplicationTerm(VariableTerm("f"), VariableTerm("x"))
-@dataclass
+@dataclass(eq=False)
 class ApplicationTerm(Term):
     function: Term
     argument: Term
@@ -637,20 +672,20 @@ class ApplicationTerm(Term):
 
 #\{a} -> x
 # AbstractionTerm(Scope(["a"], VariableTerm("x")))
-@dataclass
+@dataclass(eq=False)
 class AbstractionTerm(Term):
     body: Scope[Term]
 
 
 # f {a}
 # InstantiationTerm(VariableTerm("f"), VariableType("a"))
-@dataclass
+@dataclass(eq=False)
 class InstantiationTerm(Term):
     function: Term
     argument: Type
 
 
-@dataclass
+@dataclass(eq=False)
 class CaseClause(Core):
     patterns: List[Pattern]
     body: Scope[Term]
@@ -660,11 +695,12 @@ def CaseClause_from_cst(cst: Tree) -> CaseClause:
     pats = [Pattern_from_cst(pat) for pat in cst.children[0].children]
     bound_vars = [v for pat in pats for v in pat.captured_variables()]
     return CaseClause(
+        source=cst,
         patterns=pats,
         body=Scope(bound_vars, Term_from_cst(cst.children[1])))
 
 
-@dataclass
+@dataclass(eq=False)
 class CaseTerm(Term):
     scrutinees: List[Term]
     clauses: List[CaseClause]
@@ -674,7 +710,7 @@ class CaseTerm(Term):
 
 
 # Data.List$reverse : ... = ...;;
-@dataclass
+@dataclass(eq=False)
 class TermDeclaration(Declaration):
     name: TermNameWithSubnames
     type: Type
@@ -684,10 +720,12 @@ class TermDeclaration(Declaration):
 ################  Modules  ################
 
 
-@dataclass
+@dataclass(eq=False)
 class Module(Core):
     declarations: List[Declaration]
 
 
 def Module_from_cst(cst: Tree) -> Module:
-    return Module(declarations=[Declaration_from_cst(decl) for decl in cst.children])
+    return Module(
+        source=cst,
+        declarations=[Declaration_from_cst(decl) for decl in cst.children])

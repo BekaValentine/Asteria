@@ -9,7 +9,7 @@ path = Path(__file__).parent.parent / 'syntax' / 'test.asteriacore'
 with path.open() as f:
     src = f.read()
 
-cst = concrete.parse(src)
+cst = concrete.parse(path, src)
 # print(cst.pretty())
 
 mod = abstract.Module_from_cst(cst)

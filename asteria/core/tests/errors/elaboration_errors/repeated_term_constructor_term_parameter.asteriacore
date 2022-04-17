@@ -1,0 +1,3 @@
+data Prod (a : Type) (b : Type) where
+   | Pair (x : a) (x : b) : Test$Prod(a,b)
+   ;;
