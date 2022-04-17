@@ -34,10 +34,9 @@ def Kind_from_cst(cst: Tree) -> Kind:
 
     raise
 
+
 # Type
 # TypeKind()
-
-
 @dataclass(eq=False)
 class TypeKind(Kind):
 
@@ -45,8 +44,8 @@ class TypeKind(Kind):
         return 'Type'
 
 
-# Type -> Type
-# FunctionKind(TypeKind(), TypeKind())
+# k0 -> k1
+# FunctionKind(k0,k1)
 @dataclass(eq=False)
 class FunctionKind(Kind):
     argument_kind: Kind
@@ -162,8 +161,8 @@ def DeclaredTermName_from_cst(cst: Tree) -> DeclaredTermName:
 ################  Types  ################
 
 
-# a : Type
-# TyVarkinding("a", TypeKind())
+# a : k
+# TyVarkinding("a", k)
 @dataclass(eq=False)
 class TyVarKinding(Core):
     tyvar: str
@@ -232,7 +231,7 @@ def Type_from_cst(cst: Tree) -> Type:
 
 
 # x
-# VariableType("")
+# VariableType("x")
 @dataclass(eq=False)
 class VariableType(Type):
     name: str
@@ -251,8 +250,8 @@ class VariableType(Type):
             return self
 
 
-# Data.Pair$Pair(a;b)
-# ConstructorType("Pair", [VariableType("a"), VariableType("b")])
+# c(a0,...,an)
+# ConstructorType(c, [a0, ..., an])
 @dataclass(eq=False)
 class ConstructorType(Type):
     name: DeclaredTypeConstructorName
@@ -263,7 +262,7 @@ class ConstructorType(Type):
 
 
 # a -> b
-# FunctionType(VariableType("a"), VariableType("b"))
+# FunctionType(a, b)
 @dataclass(eq=False)
 class FunctionType(Type):
     argument_type: Type
@@ -277,8 +276,8 @@ class FunctionType(Type):
             return p
 
 
-# forall (a : Type). a
-# ForallType(TypeKind(), Scope(["a"], VariableType("a")))
+# forall (a : k). body
+# ForallType(k, Scope(["a"], body))
 @dataclass(eq=False)
 class ForallType(Type):
     tyvar_kind: Kind
@@ -292,8 +291,8 @@ class ForallType(Type):
             return p
 
 
-# \(a : Type) -> a
-# LambdaType(TypeKind(), Scope(["a"], VariableType("a")))
+# \(a : k) -> body
+# LambdaType(k, Scope(["a"], body))
 @dataclass(eq=False)
 class LambdaType(Type):
     tyvar_kind: Kind
@@ -307,8 +306,8 @@ class LambdaType(Type):
             return p
 
 
-# f $ a
-# ApplicationType(VariableType("f"), VariableType("a"))
+# f a
+# ApplicationType(f, a)
 @dataclass(eq=False)
 class ApplicationType(Type):
     function: Type
@@ -399,7 +398,7 @@ class ConstructorSignature(Core):
                ts.return_type.pretty()
 
 
-# constructor Data.Pair$Pair$MkPair {a : Type} {b : Type} (x : a) (y : b) : Data.Pair$Pair(a;b);;
+# | MkPair {a : Type} {b : Type} (x : a) (y : b) : Data.Pair$Pair(a;b);;
 @dataclass(eq=False)
 class ConstructorDeclaration(Core):
     name: str
@@ -436,7 +435,7 @@ class TypeConstructorSignature(Core):
         return ' '.join([f'({tvk.tyvar} : {tvk.kind.pretty()})' for tvk in self.parameters])
 
 
-# datatype Data.Pair$Pair (a : Type) (b : Type);;
+# data Pair (a : Type) (b : Type) where ...;;
 @dataclass(eq=False)
 class DataDeclaration(Declaration):
     name: str
@@ -463,10 +462,9 @@ def TypeVariablePattern_from_cst(cst: Tree) -> TypeVariablePattern:
         return WildcardTypeVariablePattern(source=cst)
     raise
 
+
 # a
 # CapturedTypeVariablePattern("a")
-
-
 @dataclass(eq=False)
 class CapturedTypeVariablePattern(TypeVariablePattern):
     tyvar: str
@@ -474,10 +472,9 @@ class CapturedTypeVariablePattern(TypeVariablePattern):
     def captured_variables(self) -> List[str]:
         return [self.tyvar]
 
+
 # _
 # WildcardTypeVariablePattern()
-
-
 @dataclass(eq=False)
 class WildcardTypeVariablePattern(TypeVariablePattern):
 
@@ -531,8 +528,8 @@ class WildcardVariablePattern(Pattern):
         return []
 
 
-# Cons(x; xs)
-# ConstructorPattern("Cons", [VariablePattern("x", VariablePattern("xs")])
+# c(a0, ..., am; x0, ... an)
+# ConstructorPattern(c, [a0, ..., am], [x0, ..., xn])
 @dataclass(eq=False)
 class ConstructorPattern(Pattern):
     constructor: str
@@ -646,8 +643,8 @@ class DeclaredTermNameTerm(Term):
     name: DeclaredTermName
 
 
-# Pair(x;y)
-# ConstructorTerm("Pair", [VariableTerm("x"), VariableTerm("y")])
+# c(a0, ..., am; x0, ..., xn)
+# ConstructorTerm(c, [a0, ..., am], [x0, ..., xn])
 @dataclass(eq=False)
 class ConstructorTerm(Term):
     constructor: str
@@ -655,36 +652,38 @@ class ConstructorTerm(Term):
     arguments: List[Term]
 
 
-# \x -> x
-# LambdaTerm(Scope(["x"], VariableTerm("x")))
+# \x -> body
+# LambdaTerm(Scope(["x"], body))
 @dataclass(eq=False)
 class LambdaTerm(Term):
     body: Scope[Term]
 
 
 # f x
-# ApplicationTerm(VariableTerm("f"), VariableTerm("x"))
+# ApplicationTerm(f, x)
 @dataclass(eq=False)
 class ApplicationTerm(Term):
     function: Term
     argument: Term
 
 
-#\{a} -> x
-# AbstractionTerm(Scope(["a"], VariableTerm("x")))
+#\{a} -> body
+# AbstractionTerm(Scope(["a"], body))
 @dataclass(eq=False)
 class AbstractionTerm(Term):
     body: Scope[Term]
 
 
 # f {a}
-# InstantiationTerm(VariableTerm("f"), VariableType("a"))
+# InstantiationTerm(f, a)
 @dataclass(eq=False)
 class InstantiationTerm(Term):
     function: Term
     argument: Type
 
 
+# | p0 | ... | pn -> body
+# CaseClause([p0, ..., pn], body)
 @dataclass(eq=False)
 class CaseClause(Core):
     patterns: List[Pattern]
@@ -700,6 +699,8 @@ def CaseClause_from_cst(cst: Tree) -> CaseClause:
         body=Scope(bound_vars, Term_from_cst(cst.children[1])))
 
 
+# case s0 | ... | sn where clauses;;
+# CaseTerm([s0, ..., sn], clauses)
 @dataclass(eq=False)
 class CaseTerm(Term):
     scrutinees: List[Term]
