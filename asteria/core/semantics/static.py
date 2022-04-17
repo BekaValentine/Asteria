@@ -43,6 +43,65 @@ class Context(object):
         return Context(self.variables | names)
 
 
+@dataclass
+class ElaboratorProblem(object):
+    pass
+
+
+@dataclass
+class ElabModule(ElaboratorProblem):
+    name: List[str]
+    module: Module
+
+
+@dataclass
+class ElabDataDeclaration(ElaboratorProblem):
+    declaration: DataDeclaration
+
+
+@dataclass
+class ElabConstructorDeclaration(ElaboratorProblem):
+    declaration: ConstructorDeclaration
+
+
+@dataclass
+class ElabTermDeclaration(ElaboratorProblem):
+    declaration: TermDeclaration
+
+
+@dataclass
+class SynthType(ElaboratorProblem):
+    context: Context
+    type: Type
+
+
+@dataclass
+class CheckTerm(ElaboratorProblem):
+    context: Context
+    type: Type
+    term: Term
+
+
+@dataclass
+class SynthTerm(ElaboratorProblem):
+    context: Context
+    term: Term
+
+
+@dataclass
+class SynthClause(ElaboratorProblem):
+    context: Context
+    pattern_types: List[Type]
+    clause: CaseClause
+
+
+@dataclass
+class CheckPattern(ElaboratorProblem):
+    context: Context
+    type: Type
+    pattern: Pattern
+
+
 class Elaborator(object):
     type_constructor_signatures: Dict[DeclaredTypeConstructorName,
                                       TypeConstructorSignature]
@@ -51,20 +110,29 @@ class Elaborator(object):
     term_signatures: Dict[DeclaredTermName, Type]
     term_definitions: Dict[DeclaredTermName, Term]
 
+    problem_stack: List[ElaboratorProblem]
+
     def __init__(self):
         self.type_constructor_signatures = {}
         self.type_constructor_constructors = {}
         self.term_signatures = {}
         self.term_definitions = {}
+        self.problem_stack = []
 
     def elab_module(self, name: List[str], mod: Module):
+        self.problem_stack.append(ElabModule(name, mod))
+
         for decl in mod.declarations:
             if isinstance(decl, DataDeclaration):
                 self.elab_data_decl(name, decl)
             elif isinstance(decl, TermDeclaration):
                 self.elab_term_decl(name, decl)
 
+        self.problem_stack.pop()
+
     def elab_data_decl(self, mods: List[str], decl: DataDeclaration):
+        self.problem_stack.append(ElabDataDeclaration(decl))
+
         tycon = DeclaredTypeConstructorName(
             modules=mods,
             name=decl.name)
@@ -83,7 +151,11 @@ class Elaborator(object):
         for condecl in decl.constructors:
             self.elab_condecl(tycon, decl.signature, condecl)
 
+        self.problem_stack.pop()
+
     def elab_condecl(self, tycon: DeclaredTypeConstructorName, tycon_sig: TypeConstructorSignature, condecl: ConstructorDeclaration) -> bool:
+        self.problem_stack.append(ElabConstructorDeclaration(condecl))
+
         if condecl.name in self.type_constructor_constructors[tycon]:
             print(
                 f'ERROR: Constructor {condecl.name} is already defined for type constructor {tycon.pretty()}')
@@ -146,9 +218,13 @@ class Elaborator(object):
             f'Term constructor {DeclaredConstructorName(tycon,condecl.name).pretty()} : {tycon_level_sig.pretty()}')
         self.type_constructor_constructors[tycon][condecl.name] = condecl.signature
 
+        self.problem_stack.pop()
+
         return True
 
     def elab_term_decl(self, mods: List[str], termdecl: TermDeclaration):
+
+        self.problem_stack.append(ElabTermDeclaration(termdecl))
 
         if termdecl.name in self.term_signatures:
             print(f'ERROR: Term name {termdecl.name} is already defined.')
@@ -168,7 +244,13 @@ class Elaborator(object):
 
         self.term_definitions[name] = termdecl.definition
 
+        self.problem_stack.pop()
+
     def synth_type(self, ctx: Context, t: Type) -> Kind:
+        self.problem_stack.append(SynthType(ctx, t))
+
+        ret_kind: Kind
+
         if isinstance(t, VariableType):
             if t.name not in ctx.variables:
                 print(f'ERROR: Type variable not in scope: {t.pretty()}')
@@ -178,7 +260,7 @@ class Elaborator(object):
                     f'ERROR: Cannot synthesize a kind for a non-type variable: {t.pretty()}')
                 exit()
 
-            return cast(HasKind, ctx.variables[t.name]).kind
+            ret_kind = cast(HasKind, ctx.variables[t.name]).kind
         elif isinstance(t, ConstructorType):
             if t.name not in self.type_constructor_signatures:
                 print(f'ERROR: Unknown type constructor: {t.name.pretty()}')
@@ -194,7 +276,7 @@ class Elaborator(object):
                     print(f'ERROR: Found kind: {k.pretty()}')
                     exit()
 
-            return TypeKind()
+            ret_kind = TypeKind()
         elif isinstance(t, FunctionType):
             k = self.synth_type(ctx, t.argument_type)
             if k != TypeKind():
@@ -212,7 +294,7 @@ class Elaborator(object):
                 print(f'ERROR: Found kind: {k.pretty()}')
                 exit()
 
-            return TypeKind()
+            ret_kind = TypeKind()
         elif isinstance(t, ForallType):
             ([new_var], new_body) = t.scope.open(ctx.names())
             ctx2 = ctx.extend({new_var: HasKind(t.tyvar_kind)})
@@ -224,13 +306,13 @@ class Elaborator(object):
                 print(f'ERROR: Found kind: {k.pretty()}')
                 exit()
 
-            return TypeKind()
+            ret_kind = TypeKind()
         elif isinstance(t, LambdaType):
             ([new_var], new_body) = t.body.open(ctx.names())
             ctx2 = ctx.extend({new_var: HasKind(t.tyvar_kind)})
             k = self.synth_type(ctx2, new_body)
 
-            return FunctionKind(argument_kind=t.tyvar_kind, return_kind=k)
+            ret_kind = FunctionKind(argument_kind=t.tyvar_kind, return_kind=k)
         elif isinstance(t, ApplicationType):
             k = self.synth_type(ctx, t.function)
 
@@ -249,12 +331,18 @@ class Elaborator(object):
                 print(f'ERROR: Found kind: {k2.pretty()}')
                 exit()
 
-            return k.return_kind
+            ret_kind = k.return_kind
         else:
             todo()
             raise
 
+        self.problem_stack.pop()
+
+        return ret_kind
+
     def check_term(self, ctx: Context, t: Type, m: Term) -> None:
+        self.problem_stack.append(CheckTerm(ctx, t, m))
+
         if isinstance(t, FunctionType) and isinstance(m, LambdaTerm):
             ([new_var], new_body) = m.body.open(ctx.names())
             self.check_term(ctx.extend(
@@ -332,7 +420,14 @@ class Elaborator(object):
                 print(f'ERROR: Synthesized type: {t2.pretty()}')
                 exit()
 
+        self.problem_stack.pop()
+
     def synth_term(self, ctx: Context, m: Term) -> Type:
+
+        self.problem_stack.append(SynthTerm(ctx, m))
+
+        ret_type: Type
+
         if isinstance(m, VariableTerm):
             if m.name not in ctx.variables:
                 print(f'ERROR: Found an unbound variable: {m.pretty()}')
@@ -341,12 +436,12 @@ class Elaborator(object):
                 print(
                     f'ERROR: Variable {m.pretty()} is used as a term variable but is declared as a type variable.')
                 exit()
-            return cast(HasType, ctx.variables[m.name]).type
+            ret_type = cast(HasType, ctx.variables[m.name]).type
         elif isinstance(m, DeclaredTermNameTerm):
             if m.name not in self.term_signatures:
                 print(f'ERROR: Unknown declared term name: {m.name.pretty()}')
                 exit()
-            return self.term_signatures[m.name]
+            ret_type = self.term_signatures[m.name]
         elif isinstance(m, TypeAnnotationTerm):
             k = self.synth_type(ctx, m.type)
             if k != TypeKind():
@@ -357,7 +452,7 @@ class Elaborator(object):
                 exit()
             norm_ty = eval_type(ctx, m.type)
             self.check_term(ctx, norm_ty, m.term)
-            return norm_ty
+            ret_type = norm_ty
         elif isinstance(m, LambdaTerm):
             print(
                 f'ERROR: Cannot synthesize type for lambda term {m.pretty()}')
@@ -371,7 +466,7 @@ class Elaborator(object):
                     f'ERROR: Expected a function type, but found: {fun_type.pretty()}')
                 exit()
             self.check_term(ctx, fun_type.argument_type, m.argument)
-            return fun_type.return_type
+            ret_type = fun_type.return_type
         elif isinstance(m, AbstractionTerm):
             print(
                 f'ERROR: Cannot synthesize type for abstraction term {m.pretty()}')
@@ -393,7 +488,8 @@ class Elaborator(object):
                 print(f'ERROR: Found kind: {k.pretty()}')
                 exit()
 
-            return eval_type(ctx.extend({forall_type.scope.names[0]: HasTypeValue(eval_type(ctx, m.argument))}), forall_type.scope.body)
+            ret_type = eval_type(ctx.extend({forall_type.scope.names[0]: HasTypeValue(
+                eval_type(ctx, m.argument))}), forall_type.scope.body)
         elif isinstance(m, ConstructorTerm):
             print(
                 f'ERROR: Cannot synthesize type for constructor term {m.pretty()}')
@@ -415,12 +511,19 @@ class Elaborator(object):
                 for clsty in uniqs:
                     print(f'ERROR: Found type: {clsty.pretty()}')
                 exit()
-            return uniqs[0]
+            ret_type = uniqs[0]
         else:
             todo()
             raise
 
+        self.problem_stack.pop()
+
+        return ret_type
+
     def synth_clause(self, ctx: Context, pat_ts: List[Type], cls: CaseClause) -> Type:
+
+        self.problem_stack.append(SynthClause(ctx, pat_ts, cls))
+
         # ensure non-overlapping names
         captured = [v for pat in cls.patterns for v in pat.captured_variables()]
         old = []
@@ -442,14 +545,20 @@ class Elaborator(object):
                         for pat_ty, pat in list(zip(pat_ts, cls.patterns))
                         for v, j in self.check_pattern(ctx, pat_ty, pat).items()}
 
+        self.problem_stack.pop()
+
         return self.synth_term(ctx.extend(new_bindings), cls.body.body)
 
     def check_pattern(self, ctx: Context, t: Type, pat: Pattern) -> Dict[str, ContextJudgment]:
 
+        self.problem_stack.append(CheckPattern(ctx, t, pat))
+
+        ret_bindings: Dict[str, ContextJudgment]
+
         if isinstance(pat, CapturedVariablePattern):
-            return {pat.var: HasType(t)}
+            ret_bindings = {pat.var: HasType(t)}
         elif isinstance(pat, WildcardVariablePattern):
-            return {}
+            ret_bindings = {}
         elif isinstance(t, ConstructorType) and isinstance(pat, ConstructorPattern):
 
             if pat.constructor not in self.type_constructor_constructors[t.name]:
@@ -502,11 +611,15 @@ class Elaborator(object):
                 print(f'ERROR: Actual type: {found_ty.pretty()}')
                 exit()
 
-            return aggregate_bindings
+            ret_bindings = aggregate_bindings
 
         else:
             todo()
             raise
+
+        self.problem_stack.pop()
+
+        return ret_bindings
 
 
 def eval_type(ctx: Context, t: Type):
