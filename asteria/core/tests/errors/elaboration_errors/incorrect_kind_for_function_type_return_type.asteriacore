@@ -1,0 +1,5 @@
+x : forall (f : Type -> Type).
+    forall (a : Type).
+      a -> f
+  = x
+  ;;

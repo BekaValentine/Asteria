@@ -1,0 +1,3 @@
+- Coverage Checking
+- Ensuring that parameters vs. indexes are enforced
+  - Check if an argument is an index, if so, force it to always be an index

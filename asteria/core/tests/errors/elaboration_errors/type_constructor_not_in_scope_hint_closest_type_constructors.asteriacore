@@ -1,0 +1,9 @@
+data Bar (a : Type) where ;;
+
+data Fooo (a : Type) where ;;
+
+data Foo where ;;
+
+x : Test$Fo()
+  = x
+  ;;

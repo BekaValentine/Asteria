@@ -1,0 +1,9 @@
+data Foo where
+   | Quux : Test$Foo()
+   | Baar : Test$Foo()
+   | Bar : Test$Foo()
+   ;;
+
+x : Test$Foo()
+  = Baa(;)
+  ;;

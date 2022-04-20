@@ -1,0 +1,3 @@
+data Unit where
+   | MkUnit : \(a : Type) -> Test$Unit()
+   ;;

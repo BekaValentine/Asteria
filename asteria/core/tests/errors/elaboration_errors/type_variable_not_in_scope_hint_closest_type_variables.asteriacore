@@ -1,0 +1,6 @@
+f : forall (foo : Type).
+    forall (bar : Type).
+    forall (baz : Type).
+      barr
+  = f
+  ;;

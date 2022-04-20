@@ -1,0 +1,3 @@
+data F (f : Type -> Type) where
+   | MkF (x : f) : Test$F(f)
+   ;;

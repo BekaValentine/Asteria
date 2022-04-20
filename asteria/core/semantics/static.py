@@ -68,7 +68,7 @@ class Elaborator(object):
             if param not in old:
                 old.append(param)
             else:
-                raise errors.RepeatedTypeConstructorParameterError(
+                raise errors.RepeatedParameterInTypeConstructorDeclarationError(
                     tasks=self.elaborator_state.task_stack,
                     parameter_name=param,
                     declaration=decl)
@@ -102,7 +102,7 @@ class Elaborator(object):
 
         for type_parameter in tycon_level_sig.term_signature.names:
             if type_parameter in previous_names:
-                raise errors.RepeatedTermConstructorTypeParameterError(
+                raise errors.RepeatedTypeParameterInTermConstructorDeclarationError(
                     tasks=self.elaborator_state.task_stack,
                     type_parameter_name=type_parameter,
                     declaration=condecl)
@@ -118,36 +118,34 @@ class Elaborator(object):
 
         for param, type in termsig.parameters:
             if param in previous_names:
-                raise errors.RepeatedTermParameterInTermConstructorDeclError(
+                raise errors.RepeatedTermParameterInTermConstructorDeclarationError(
                     tasks=self.elaborator_state.task_stack,
                     term_parameter_name=param,
                     declaration=condecl)
             previous_names.append(param)
             k = self.synth_type(ctx, type)
             if not isinstance(k, TypeKind):
-                self.log(
-                    f'ERROR: Found a constructor parameter with an incorrectly kinded type: {param} in signature for constructor {condecl.name}')
-                self.log(
-                    f'ERROR: Expected kind: {TypeKind(source=None).pretty()}')
-                self.log(f'ERROR: Found kind: {k.pretty()}')
-                exit()
+                raise errors.IncorrectKindForConstructorParameterTypeError(
+                    tasks=self.elaborator_state.task_stack,
+                    parameter_name=param,
+                    found_kind=k,
+                    declaration=condecl)
 
         ctx = ctx.extend({v: HasType(t) for v, t in termsig.parameters})
 
         k = self.synth_type(ctx, termsig.return_type)
         if not isinstance(k, TypeKind):
-            self.log(
-                f'ERROR: Found a constructor declaration that returns an incorrectly kinded type: {termsig.return_type.pretty()} in signature for constructor {condecl.name}')
-            self.log(f'ERROR: Expected kind: {TypeKind(source=None).pretty()}')
-            self.log(f'ERROR: Found kind: {k.pretty()}')
-            exit()
+            raise errors.IncorrectKindForConstructorReturnTypeError(
+                tasks=self.elaborator_state.task_stack,
+                found_kind=k,
+                declaration=condecl)
 
         if not isinstance(termsig.return_type, ConstructorType) or termsig.return_type.name != tycon:
-            self.log(
-                f'ERROR: Found a constructor declaration that returns an invalid type: {termsig.return_type.pretty()} in signature for constructor {condecl.name}')
-            self.log(
-                f'ERROR: Expected a constructor type using the type constructor {tycon.pretty()}')
-            exit()
+            raise errors.IncorrectTypeForConstructorDeclarationReturnTypeError(
+                tasks=self.elaborator_state.task_stack,
+                found_type=termsig.return_type,
+                type_constructor=tycon,
+                declaration=condecl)
 
         self.log(
             f'Term constructor {DeclaredConstructorName(tycon,condecl.name).pretty()} : {tycon_level_sig.pretty()}')
@@ -161,15 +159,18 @@ class Elaborator(object):
 
         self.elaborator_state.task_stack.append(ElabTermDeclaration(termdecl))
 
-        if termdecl.name in self.elaborator_state.term_signatures:
-            self.log(f'ERROR: Term name {termdecl.name} is already defined.')
+        name = DeclaredTermName(mods, termdecl.name)
+        if name in self.elaborator_state.term_signatures:
+            raise errors.TermNameAlreadyDefinedError(
+                tasks=self.elaborator_state.task_stack,
+                declaration=termdecl)
 
         k = self.synth_type(Context({}), termdecl.type)
         if not isinstance(k, TypeKind):
-            self.log(f'ERROR: ...')
-            exit()
-
-        name = DeclaredTermName(mods, termdecl.name)
+            raise errors.IncorrectKindForTermDeclarationTypeError(
+                tasks=self.elaborator_state.task_stack,
+                found_kind=k,
+                declaration=termdecl)
 
         self.log(
             f'Term name {name.pretty()} : {termdecl.type.pretty()}')
@@ -188,48 +189,50 @@ class Elaborator(object):
 
         if isinstance(t, VariableType):
             if t.name not in ctx.variables:
-                self.log(f'ERROR: Type variable not in scope: {t.pretty()}')
-                exit()
-            elif not isinstance(ctx.variables[t.name], HasKind):
-                self.log(
-                    f'ERROR: Cannot synthesize a kind for a non-type variable: {t.pretty()}')
-                exit()
+                raise errors.TypeVariableNotInScopeError(
+                    tasks=self.elaborator_state.task_stack,
+                    type=t,
+                    context=ctx)
+            elif isinstance(ctx.variables[t.name], HasType):
+                raise errors.TermVariableUsedAsTypeVariableError(
+                    tasks=self.elaborator_state.task_stack,
+                    type=t,
+                    context=ctx)
 
             ret_kind = cast(HasKind, ctx.variables[t.name]).kind
         elif isinstance(t, ConstructorType):
             if t.name not in self.elaborator_state.type_constructor_signatures:
-                self.log(f'ERROR: Unknown type constructor: {t.name.pretty()}')
-                exit()
+                raise errors.TypeConstructorNotInScopeError(
+                    tasks=self.elaborator_state.task_stack,
+                    type=t,
+                    known_type_constructors=self.elaborator_state.type_constructor_signatures)
             sig = [
                 tvk.kind for tvk in self.elaborator_state.type_constructor_signatures[t.name].parameters]
             for i, arg in enumerate(t.arguments):
                 k = self.synth_type(ctx, arg)
                 if k != sig[i]:
-                    self.log(
-                        f'ERROR: Mismatched kinds for type parameter {arg.pretty()} of constructor type {k.pretty()}')
-                    self.log(f'ERROR: Expecting kind: {sig[i].pretty()}')
-                    self.log(f'ERROR: Found kind: {k.pretty()}')
-                    exit()
+                    raise errors.IncorrectKindForTypeParameterError(
+                        tasks=self.elaborator_state.task_stack,
+                        type=t,
+                        parameter=arg,
+                        expected_kind=sig[i],
+                        found_kind=k)
 
             ret_kind = TypeKind(source=None)
         elif isinstance(t, FunctionType):
             k = self.synth_type(ctx, t.argument_type)
             if not isinstance(k, TypeKind):
-                self.log(
-                    f'ERROR: Found a function type with an incorrectly kinded argument type: {t.pretty()}')
-                self.log(
-                    f'ERROR: Expecting kind: {TypeKind(source=None).pretty()}')
-                self.log(f'ERROR: Found kind: {k.pretty()}')
-                exit()
+                raise errors.IncorrectKindForFunctionTypeArgumentTypeError(
+                    tasks=self.elaborator_state.task_stack,
+                    type=t,
+                    found_kind=k)
 
             k = self.synth_type(ctx, t.return_type)
             if not isinstance(k, TypeKind):
-                self.log(
-                    f'ERROR: Found a function type with an incorrectly kinded return type: {t.pretty()}')
-                self.log(
-                    f'ERROR: Expecting kind: {TypeKind(source=None).pretty()}')
-                self.log(f'ERROR: Found kind: {k.pretty()}')
-                exit()
+                raise errors.IncorrectKindForFunctionTypeReturnTypeError(
+                    tasks=self.elaborator_state.task_stack,
+                    type=t,
+                    found_kind=k)
 
             ret_kind = TypeKind(source=None)
         elif isinstance(t, ForallType):
@@ -237,12 +240,10 @@ class Elaborator(object):
             ctx2 = ctx.extend({new_var: HasKind(t.tyvar_kind)})
             k = self.synth_type(ctx2, new_body)
             if not isinstance(k, TypeKind):
-                self.log(
-                    f'ERROR: Found a forall type with an incorrectly kinded scope: {t.pretty()}')
-                self.log(
-                    f'ERROR: Expecting kind: {TypeKind(source=None).pretty()}')
-                self.log(f'ERROR: Found kind: {k.pretty()}')
-                exit()
+                raise errors.IncorrectKindForForallTypeScopeError(
+                    tasks=self.elaborator_state.task_stack,
+                    type=t,
+                    found_kind=k)
 
             ret_kind = TypeKind(source=None)
         elif isinstance(t, LambdaType):
@@ -257,19 +258,18 @@ class Elaborator(object):
             k = self.synth_type(ctx, t.function)
 
             if not isinstance(k, FunctionKind):
-                self.log(
-                    f'ERROR: Found an application type with an incorrectly kinded function: {t.pretty()}')
-                self.log(
-                    f'ERROR: Expected a function kind but found: {k.pretty()}')
-                exit()
+                raise errors.IncorrectKindForApplicationTypeFunctionError(
+                    tasks=self.elaborator_state.task_stack,
+                    type=t,
+                    found_kind=k)
 
             k2 = self.synth_type(ctx, t.argument)
             if k.argument_kind != k2:
-                self.log(
-                    f'ERROR: Found an application type with an incorrectly kinded argument: {t.pretty()}')
-                self.log(f'ERROR: Expected kind: {k.argument_kind.pretty()}')
-                self.log(f'ERROR: Found kind: {k2.pretty()}')
-                exit()
+                raise errors.IncorrectKindForApplicationTypeArgumentError(
+                    tasks=self.elaborator_state.task_stack,
+                    type=t,
+                    expected_kind=k.argument_kind,
+                    found_kind=k2)
 
             ret_kind = k.return_kind
         else:
@@ -295,9 +295,11 @@ class Elaborator(object):
 
         elif isinstance(t, ConstructorType) and isinstance(m, ConstructorTerm):
             if m.constructor not in self.elaborator_state.type_constructor_constructors[t.name]:
-                self.log(
-                    f'ERROR: The type constructor {t.name.pretty()} does not have a constructor named {m.constructor}')
-                exit()
+                raise errors.TermConstructorNotInScopeError(
+                    tasks=self.elaborator_state.task_stack,
+                    term=m,
+                    type=t,
+                    known_term_constructors=self.elaborator_state.type_constructor_constructors[t.name])
 
             new_tycon_param_names, consig = self.elaborator_state.type_constructor_constructors[t.name][m.constructor].open(
                 ctx.names())
@@ -308,11 +310,11 @@ class Elaborator(object):
             })
 
             if len(m.type_arguments) != len(consig.type_parameters_kinds):
-                self.log(
-                    f'ERROR: Incorrect number of type arguments in constructor term {m.pretty()}')
-                self.log(f'Expected {len(consig.type_parameters_kinds)}')
-                self.log(f'Found {len(m.type_arguments)}')
-                exit()
+                raise errors.IncorrectNumberOfTypeArgumentsForConstructor(
+                    tasks=self.elaborator_state.task_stack,
+                    term=m,
+                    expected_number=len(consig.type_parameters_kinds),
+                    found_number=len(m.type_arguments))
 
             new_typaram_names, termsig = consig.term_signature.open(
                 ctx.names())
@@ -320,10 +322,10 @@ class Elaborator(object):
             for tyargkind, tyarg in zip(consig.type_parameters_kinds, m.type_arguments):
                 k = self.synth_type(ctx, tyarg)
                 if tyargkind != k:
-                    self.log(
+                    print(
                         f'ERROR: Incorrect kind for type argument {tyarg.pretty()} in constructor term {m.pretty()}')
-                    self.log(f'ERROR: Expected kind: {tyargkind.pretty()}')
-                    self.log(f'ERROR: Found kind: {k.pretty()}')
+                    print(f'ERROR: Expected kind: {tyargkind.pretty()}')
+                    print(f'ERROR: Found kind: {k.pretty()}')
                     exit()
 
             ctx = ctx.extend({
@@ -332,11 +334,11 @@ class Elaborator(object):
             })
 
             if len(m.arguments) != len(termsig.parameters):
-                self.log(
+                print(
                     f'ERROR: Incorrect number of arguments in constructor term {m.pretty()}')
-                self.log(
+                print(
                     f'Expected {len(termsig.parameters)}')
-                self.log(f'Found {len(m.arguments)}')
+                print(f'Found {len(m.arguments)}')
                 exit()
 
             for (_, argty), arg in zip(termsig.parameters, m.arguments):
@@ -345,19 +347,19 @@ class Elaborator(object):
 
             found_ty = eval_type(ctx, termsig.return_type)
             if found_ty != t:
-                self.log(
+                print(
                     f'ERROR: Constructor term does not inhabit given type: {m.pretty()}')
-                self.log(f'ERROR: Expected type: {t.pretty()}')
-                self.log(f'ERROR: Actual type: {found_ty.pretty()}')
+                print(f'ERROR: Expected type: {t.pretty()}')
+                print(f'ERROR: Actual type: {found_ty.pretty()}')
                 exit()
         else:
             t2 = self.synth_term(ctx, m)
             if t2 != t:
-                self.log(
+                print(
                     f'ERROR: Term with synthesized type does not inhabit expected type')
-                self.log(f'ERROR: Term: {m.pretty()}')
-                self.log(f'ERROR: Expected type: {t.pretty()}')
-                self.log(f'ERROR: Synthesized type: {t2.pretty()}')
+                print(f'ERROR: Term: {m.pretty()}')
+                print(f'ERROR: Expected type: {t.pretty()}')
+                print(f'ERROR: Synthesized type: {t2.pretty()}')
                 exit()
 
         self.elaborator_state.task_stack.pop()
@@ -370,76 +372,76 @@ class Elaborator(object):
 
         if isinstance(m, VariableTerm):
             if m.name not in ctx.variables:
-                self.log(f'ERROR: Found an unbound variable: {m.pretty()}')
+                print(f'ERROR: Found an unbound variable: {m.pretty()}')
                 exit()
             if not isinstance(ctx.variables[m.name], HasType):
-                self.log(
+                print(
                     f'ERROR: Variable {m.pretty()} is used as a term variable but is declared as a type variable.')
                 exit()
             ret_type = cast(HasType, ctx.variables[m.name]).type
         elif isinstance(m, DeclaredTermNameTerm):
             if m.name not in self.elaborator_state.term_signatures:
-                self.log(
+                print(
                     f'ERROR: Unknown declared term name: {m.name.pretty()}')
                 exit()
             ret_type = self.elaborator_state.term_signatures[m.name]
         elif isinstance(m, TypeAnnotationTerm):
             k = self.synth_type(ctx, m.type)
             if not isinstance(k, TypeKind):
-                self.log(
+                print(
                     f'ERROR: Mismatched kinds for annotation type: {m.type.pretty()}')
-                self.log(
+                print(
                     f'ERROR: Expected kind: {TypeKind(source=None).pretty()}')
-                self.log(f'ERROR: Found kind: {k.pretty()}')
+                print(f'ERROR: Found kind: {k.pretty()}')
                 exit()
             norm_ty = eval_type(ctx, m.type)
             self.check_term(ctx, norm_ty, m.term)
             ret_type = norm_ty
         elif isinstance(m, LambdaTerm):
-            self.log(
+            print(
                 f'ERROR: Cannot synthesize type for lambda term {m.pretty()}')
             exit()
         elif isinstance(m, ApplicationTerm):
             fun_type = self.synth_term(ctx, m.function)
             if not isinstance(fun_type, FunctionType):
-                self.log(
+                print(
                     f'ERROR: Mismatched types for the function of a function application: {m.pretty()}')
-                self.log(
+                print(
                     f'ERROR: Expected a function type, but found: {fun_type.pretty()}')
                 exit()
             self.check_term(ctx, fun_type.argument_type, m.argument)
             ret_type = fun_type.return_type
         elif isinstance(m, AbstractionTerm):
-            self.log(
+            print(
                 f'ERROR: Cannot synthesize type for abstraction term {m.pretty()}')
             exit()
         elif isinstance(m, InstantiationTerm):
             forall_type = self.synth_term(ctx, m.function)
             if not isinstance(forall_type, ForallType):
-                self.log(
+                print(
                     f'ERROR: Mismatched types for the function of an instantiation: {m.pretty()}')
-                self.log(
+                print(
                     f'ERROR: Expected a forall type, but found: {forall_type.pretty()}')
                 exit()
             k = self.synth_type(ctx, m.argument)
             if k != forall_type.tyvar_kind:
-                self.log(
+                print(
                     f'ERROR: Mismatched kinds for the argument of an instantiation: {m.pretty()}')
-                self.log(
+                print(
                     f'ERROR: Expected kind: {forall_type.tyvar_kind.pretty()}')
-                self.log(f'ERROR: Found kind: {k.pretty()}')
+                print(f'ERROR: Found kind: {k.pretty()}')
                 exit()
 
             ret_type = eval_type(ctx.extend({forall_type.scope.names[0]: HasTypeValue(
                 eval_type(ctx, m.argument))}), forall_type.scope.body)
         elif isinstance(m, ConstructorTerm):
-            self.log(
+            print(
                 f'ERROR: Cannot synthesize type for constructor term {m.pretty()}')
             exit()
         elif isinstance(m, CaseTerm):
             scrutinee_types = [self.synth_term(ctx, n) for n in m.scrutinees]
             if len(m.clauses) == 0:
-                self.log(f'ERROR: Cannot synthesize types for empty case term')
+                print(f'ERROR: Cannot synthesize types for empty case term')
                 exit()
             clause_types = [self.synth_clause(
                 ctx, scrutinee_types, cls) for cls in m.clauses]
@@ -448,10 +450,10 @@ class Elaborator(object):
                 if clsty not in uniqs:
                     uniqs.append(clsty)
             if len(uniqs) != 1:
-                self.log(
+                print(
                     f'ERROR: Found different clause types for difference case clausses')
                 for clsty in uniqs:
-                    self.log(f'ERROR: Found type: {clsty.pretty()}')
+                    print(f'ERROR: Found type: {clsty.pretty()}')
                 exit()
             ret_type = uniqs[0]
         else:
@@ -478,9 +480,9 @@ class Elaborator(object):
             else:
                 old.append(v)
         if len(repeated) != 0:
-            self.log(
+            print(
                 f'ERROR: Found repeated variables in patterns {cls.patterns}')
-            self.log(f'ERROR: Repeated: {" ".join(repeated)}')
+            print(f'ERROR: Repeated: {" ".join(repeated)}')
             exit()
 
         new_bindings = {v: cast(ContextJudgment, j)
@@ -504,7 +506,7 @@ class Elaborator(object):
         elif isinstance(t, ConstructorType) and isinstance(pat, ConstructorPattern):
 
             if pat.constructor not in self.elaborator_state.type_constructor_constructors[t.name]:
-                self.log(
+                print(
                     f'ERROR: The type constructor {t.name.pretty()} does not have a constructor named {pat.constructor}')
                 exit()
 
@@ -519,10 +521,10 @@ class Elaborator(object):
             new_type_params, termsig = consig.term_signature.open(ctx.names())
 
             if len(pat.type_arguments) != len(consig.type_parameters_kinds):
-                self.log(
+                print(
                     f'ERROR: Incorrect number of type arguments in constructor pattern {pat.pretty()}')
-                self.log(f'Expected {len(consig.type_parameters_kinds)}')
-                self.log(f'Found {len(pat.type_arguments)}')
+                print(f'Expected {len(consig.type_parameters_kinds)}')
+                print(f'Found {len(pat.type_arguments)}')
                 exit()
 
             ctx = ctx.extend({
@@ -531,10 +533,10 @@ class Elaborator(object):
             })
 
             if len(pat.arguments) != len(termsig.parameters):
-                self.log(
+                print(
                     f'ERROR: Incorrect number of arguments in constructor pattern {pat.pretty()}')
-                self.log(f'Expected {len(termsig.parameters)}')
-                self.log(f'Found {len(pat.arguments)}')
+                print(f'Expected {len(termsig.parameters)}')
+                print(f'Found {len(pat.arguments)}')
                 exit()
 
             aggregate_bindings = {tvp.tyvar: cast(ContextJudgment, HasKind(k))
@@ -547,10 +549,10 @@ class Elaborator(object):
 
             found_ty = eval_type(ctx, termsig.return_type)
             if found_ty != t:
-                self.log(
+                print(
                     f'ERROR: Constructor pattern does not inhabit given type: {pat.pretty()}')
-                self.log(f'ERROR: Expected type: {t.pretty()}')
-                self.log(f'ERROR: Actual type: {found_ty.pretty()}')
+                print(f'ERROR: Expected type: {t.pretty()}')
+                print(f'ERROR: Actual type: {found_ty.pretty()}')
                 exit()
 
             ret_bindings = aggregate_bindings

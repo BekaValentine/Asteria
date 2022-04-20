@@ -1,0 +1,5 @@
+data Foo where ;;
+
+x : Test$Foo()
+  = Bar(;)
+  ;;

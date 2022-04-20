@@ -35,8 +35,19 @@ def Kind_from_cst(cst: Tree) -> Kind:
     raise
 
 
+# x
+# MetaSyntacticVariableKind("x")
+@dataclass(eq=False)
+class MetaSyntacticVariableKind(Kind):
+    name: str
+
+    def pretty(self, prec=None) -> str:
+        return self.name
+
 # Type
 # TypeKind()
+
+
 @dataclass(eq=False)
 class TypeKind(Kind):
 
@@ -231,13 +242,33 @@ def Type_from_cst(cst: Tree) -> Type:
 
 
 # x
+# MetaSyntacticVariableType("x")
+@dataclass(eq=False)
+class MetaSyntacticVariableType(Type):
+    name: str
+
+    def pretty(self, prec=None) -> str:
+        return self.name
+
+    def rename(self, renaming):
+        if renaming == {}:
+            return self
+        if self.name in renaming:
+            return VariableType(
+                source=self.source,
+                name=renaming[self.name])
+        else:
+            return self
+
+
+# x
 # VariableType("x")
 @dataclass(eq=False)
 class VariableType(Type):
     name: str
 
     def pretty(self, prec=None) -> str:
-        return f'{self.name}'
+        return self.name
 
     def rename(self, renaming):
         if renaming == {}:
@@ -625,7 +656,9 @@ class VariableTerm(Term):
         if renaming == {}:
             return self
         if self.name in renaming:
-            return VariableTerm(renaming[self.name])
+            return VariableTerm(
+                source=self.source,
+                name=renaming[self.name])
         else:
             return self
 
@@ -650,6 +683,9 @@ class ConstructorTerm(Term):
     constructor: str
     type_arguments: List[Type]
     arguments: List[Term]
+
+    def pretty(self, prec=None):
+        return f'{self.constructor}({",".join([t.pretty() for t in self.type_arguments])};{",".join([m.pretty() for m in self.arguments])})'
 
 
 # \x -> body

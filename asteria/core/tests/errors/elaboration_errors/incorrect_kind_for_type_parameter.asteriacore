@@ -1,0 +1,5 @@
+data F (a : Type) where ;;
+
+x : Test$F(\(a : Type) -> a)
+  = x
+  ;;
