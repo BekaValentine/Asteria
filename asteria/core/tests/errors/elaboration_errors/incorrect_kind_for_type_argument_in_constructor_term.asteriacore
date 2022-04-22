@@ -3,5 +3,5 @@ data T where
    ;;
 
 x : Test$T()
-  = MkT(Test$T(), Test$T();)
+  = MkT(\(a : Type) -> a;)
   ;;

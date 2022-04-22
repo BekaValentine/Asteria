@@ -1,6 +1,11 @@
 from dataclasses import dataclass, fields
-from typing import Dict, List, TypeVar, Generic, Tuple, Optional, cast
+import re
+from typing import Dict, List, TypeVar, Generic, Tuple, Optional, Union, ClassVar, cast
 import lark
+
+
+def camel_to_snake(s):
+    return re.sub('((.)([A-Z]))', '\\2_\\3', s).lower()
 
 
 def todo():
@@ -34,6 +39,7 @@ def fresh_variables(olds: List[str], names: List[str]) -> List[str]:
 
 @dataclass(eq=False)
 class Syntax(object):
+    paren: ClassVar[List[str]] = []
     source: Optional[lark.Tree]
 
     def __eq__(self, other) -> bool:
@@ -43,8 +49,43 @@ class Syntax(object):
             if field.name != 'source'
         ])
 
-    def pretty(self, prec=None) -> str:
-        return f'(unknown-syntax {self})'
+    @staticmethod
+    def pretty_value(obj, loc):
+        if isinstance(obj, Syntax):
+            return obj.pretty(loc)
+        elif isinstance(obj, Scope):
+            return (obj.names, obj.body.pretty(loc))
+        elif callable(getattr(obj, 'pretty', None)):
+            return obj.pretty()
+        elif isinstance(obj, str):
+            return obj
+        elif isinstance(obj, list):
+            return [Syntax.pretty_value(x, loc) for x in obj]
+        elif isinstance(obj, tuple):
+            return tuple(Syntax.pretty_value(list(obj), loc))
+        elif isinstance(obj, object):
+            return {
+                k: Syntax.pretty_value(obj[k], loc)
+                for k in obj
+            }
+        else:
+            return repr(part)
+
+    def pretty(self, loc=None) -> str:
+        construct_name = camel_to_snake(self.__class__.__name__)
+        parts: List[Union[str, List[str], Tuple[List[str], str]]] = []
+        for partloc, part in self.__dict__.items():
+            if partloc != 'source':
+                parts.append(Syntax.pretty_value(
+                    part, f'{construct_name}.{partloc}'))
+
+        p = self.concrete(*parts)
+        if loc in self.paren:
+            p = f'({p})'
+        return p
+
+    def concrete(self, *args) -> str:
+        return f'(unknown-syntax {self.__class__.__name__})'
 
     def rename(self, renaming):
         if renaming == {}:

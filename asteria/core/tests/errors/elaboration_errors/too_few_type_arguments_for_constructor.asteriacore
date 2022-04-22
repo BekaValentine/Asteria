@@ -1,7 +1,7 @@
-data Id (a : Type) where
-   | MkId {b : Type} : Test$Id(b)
+data T where
+   | MkT {a : Type} : Test$T()
    ;;
 
-x : forall (a : Type). Test$Id(a)
-  = \{a} -> MkId(;)
+x : Test$T()
+  = MkT(;)
   ;;

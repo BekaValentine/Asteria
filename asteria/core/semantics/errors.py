@@ -699,3 +699,116 @@ class IncorrectNumberOfTypeArgumentsForConstructor(ElabError):
         last_line = self.term.source.meta.end_line-1
         return extract_and_show_source_lines(first_line, last_line,
                                              self.term.source.source_info['text_lines'])
+
+
+@dataclass
+class IncorrectKindForTypeArgumentInConstructorTermError(ElabError):
+    type_argument: Type
+    term: ConstructorTerm
+    expected_kind: Kind
+    found_kind: Kind
+
+    def path(self):
+        return self.type_argument.source.source_info['path']
+
+    def message_lines(self):
+        return [
+            'Incorrect kind for type argument:',
+            '',
+            f'  {COLOR_ERROR_HIGHLIGHT}{self.type_argument.pretty()}{COLOR_RESET}',
+            '',
+            'In constructor term:',
+            '',
+            f'  {COLOR_ERROR_HIGHLIGHT}{self.term.pretty()}{COLOR_RESET}',
+            '',
+            'Expected kind:',
+            '',
+            f'  {COLOR_ERROR_HIGHLIGHT}{self.expected_kind.pretty()}{COLOR_RESET}',
+            '',
+            'Found kind:',
+            '',
+            f'  {COLOR_ERROR_HIGHLIGHT}{self.found_kind.pretty()}{COLOR_RESET}'
+        ]
+
+    def highlight_lines(self):
+        first_line = self.type_argument.source.meta.line-1
+        last_line = self.type_argument.source.meta.end_line-1
+        return extract_and_show_source_lines(first_line, last_line,
+                                             self.type_argument.source.source_info['text_lines'])
+
+
+@dataclass
+class IncorrectNumberOfArgumentsForConstructorError(ElabError):
+    term: ConstructorTerm
+    expected_number: int
+    found_number: int
+
+    def path(self):
+        return self.term.source.source_info['path']
+
+    def message_lines(self):
+        if self.expected_number > self.found_number:
+            return [
+                'Too few arguments given in constructor term:',
+                '',
+                f'  {COLOR_ERROR_HIGHLIGHT}{self.term.pretty()}{COLOR_RESET}',
+                '',
+                'Expected number:',
+                '',
+                f'  {COLOR_ERROR_HIGHLIGHT}{self.expected_number}{COLOR_RESET}',
+                '',
+                'Found number:',
+                '',
+                f'  {COLOR_ERROR_HIGHLIGHT}{self.found_number}{COLOR_RESET}'
+            ]
+        else:
+            return [
+                'Too many arguments given in constructor term:',
+                '',
+                f'  {COLOR_ERROR_HIGHLIGHT}{self.term.pretty()}{COLOR_RESET}',
+                '',
+                'Expected number:',
+                '',
+                f'  {COLOR_ERROR_HIGHLIGHT}{self.expected_number}{COLOR_RESET}',
+                '',
+                'Found number:',
+                '',
+                f'  {COLOR_ERROR_HIGHLIGHT}{self.found_number}{COLOR_RESET}'
+            ]
+
+    def highlight_lines(self):
+        first_line = self.term.source.meta.line-1
+        last_line = self.term.source.meta.end_line-1
+        return extract_and_show_source_lines(first_line, last_line,
+                                             self.term.source.source_info['text_lines'])
+
+
+@dataclass
+class ConstructorTermDoesNotInhabitCheckTypeError(ElabError):
+    term: ConstructorTerm
+    expected_type: Type
+    found_type: Type
+
+    def path(self):
+        return self.term.source.source_info['path']
+
+    def message_lines(self):
+        return [
+            'Constructor term does not inhabit the type it\'s being checked against:',
+            '',
+            f'  {COLOR_ERROR_HIGHLIGHT}{self.term.pretty()}{COLOR_RESET}',
+            '',
+            'Expected type:',
+            '',
+            f'  {COLOR_ERROR_HIGHLIGHT}{self.expected_type.pretty()}{COLOR_RESET}',
+            '',
+            'Found type:',
+            '',
+            f'  {COLOR_ERROR_HIGHLIGHT}{self.found_type.pretty()}{COLOR_RESET}'
+        ]
+
+    def highlight_lines(self):
+        first_line = self.term.source.meta.line-1
+        last_line = self.term.source.meta.end_line-1
+        return extract_and_show_source_lines(first_line, last_line,
+                                             self.term.source.source_info['text_lines'])

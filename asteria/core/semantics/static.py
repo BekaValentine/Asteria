@@ -322,11 +322,12 @@ class Elaborator(object):
             for tyargkind, tyarg in zip(consig.type_parameters_kinds, m.type_arguments):
                 k = self.synth_type(ctx, tyarg)
                 if tyargkind != k:
-                    print(
-                        f'ERROR: Incorrect kind for type argument {tyarg.pretty()} in constructor term {m.pretty()}')
-                    print(f'ERROR: Expected kind: {tyargkind.pretty()}')
-                    print(f'ERROR: Found kind: {k.pretty()}')
-                    exit()
+                    raise errors.IncorrectKindForTypeArgumentInConstructorTermError(
+                        tasks=self.elaborator_state.task_stack,
+                        type_argument=tyarg,
+                        term=m,
+                        expected_kind=tyargkind,
+                        found_kind=k)
 
             ctx = ctx.extend({
                 tyvar: HasTypeValue(tyval)
@@ -334,12 +335,11 @@ class Elaborator(object):
             })
 
             if len(m.arguments) != len(termsig.parameters):
-                print(
-                    f'ERROR: Incorrect number of arguments in constructor term {m.pretty()}')
-                print(
-                    f'Expected {len(termsig.parameters)}')
-                print(f'Found {len(m.arguments)}')
-                exit()
+                raise errors.IncorrectNumberOfArgumentsForConstructorError(
+                    tasks=self.elaborator_state.task_stack,
+                    term=m,
+                    expected_number=len(termsig.parameters),
+                    found_number=len(m.arguments))
 
             for (_, argty), arg in zip(termsig.parameters, m.arguments):
                 self.check_term(ctx, eval_type(
@@ -347,11 +347,11 @@ class Elaborator(object):
 
             found_ty = eval_type(ctx, termsig.return_type)
             if found_ty != t:
-                print(
-                    f'ERROR: Constructor term does not inhabit given type: {m.pretty()}')
-                print(f'ERROR: Expected type: {t.pretty()}')
-                print(f'ERROR: Actual type: {found_ty.pretty()}')
-                exit()
+                raise errors.ConstructorTermDoesNotInhabitCheckTypeError(
+                    tasks=self.elaborator_state.task_stack,
+                    term=m,
+                    expected_type=t,
+                    found_type=found_ty)
         else:
             t2 = self.synth_term(ctx, m)
             if t2 != t:

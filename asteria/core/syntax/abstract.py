@@ -16,9 +16,7 @@ class Core(Syntax):
 
 @dataclass(eq=False)
 class Kind(Core):
-
-    def pretty(self, prec=None) -> str:
-        return f'(unknown kind: {self})'
+    pass
 
 
 def Kind_from_cst(cst: Tree) -> Kind:
@@ -41,8 +39,8 @@ def Kind_from_cst(cst: Tree) -> Kind:
 class MetaSyntacticVariableKind(Kind):
     name: str
 
-    def pretty(self, prec=None) -> str:
-        return self.name
+    def concrete(self, name):
+        return name
 
 # Type
 # TypeKind()
@@ -50,8 +48,7 @@ class MetaSyntacticVariableKind(Kind):
 
 @dataclass(eq=False)
 class TypeKind(Kind):
-
-    def pretty(self, prec=None) -> str:
+    def concrete(self):
         return 'Type'
 
 
@@ -59,17 +56,12 @@ class TypeKind(Kind):
 # FunctionKind(k0,k1)
 @dataclass(eq=False)
 class FunctionKind(Kind):
+    parens = ['function_kind.argument_kind']
     argument_kind: Kind
     return_kind: Kind
 
-    def pretty(self, prec=None) -> str:
-        p = f'{self.argument_kind.pretty()} -> {self.return_kind.pretty()}'
-        if prec is None:
-            return p
-        elif prec == 'argument':
-            return f'({p})'
-
-        raise
+    def concrete(self, arg, ret):
+        return f'{arg} -> {ret}'
 
 
 ################  Names  ################
@@ -179,6 +171,9 @@ class TyVarKinding(Core):
     tyvar: str
     kind: Kind
 
+    def concrete(self, v, k):
+        return f'({v} : {k})'
+
 
 def TyVarKinding_from_cst(cst: Tree) -> TyVarKinding:
     return TyVarKinding(
@@ -247,9 +242,6 @@ def Type_from_cst(cst: Tree) -> Type:
 class MetaSyntacticVariableType(Type):
     name: str
 
-    def pretty(self, prec=None) -> str:
-        return self.name
-
     def rename(self, renaming):
         if renaming == {}:
             return self
@@ -259,6 +251,9 @@ class MetaSyntacticVariableType(Type):
                 name=renaming[self.name])
         else:
             return self
+
+    def concrete(self, name):
+        return name
 
 
 # x
@@ -267,9 +262,6 @@ class MetaSyntacticVariableType(Type):
 class VariableType(Type):
     name: str
 
-    def pretty(self, prec=None) -> str:
-        return self.name
-
     def rename(self, renaming):
         if renaming == {}:
             return self
@@ -279,6 +271,9 @@ class VariableType(Type):
                 name=renaming[self.name])
         else:
             return self
+
+    def concrete(self, name):
+        return name
 
 
 # c(a0,...,an)
@@ -288,68 +283,72 @@ class ConstructorType(Type):
     name: DeclaredTypeConstructorName
     arguments: List[Type]
 
-    def pretty(self, prec=None) -> str:
-        return self.name.pretty() + '(' + ','.join([t.pretty() for t in self.arguments]) + ')'
+    def concrete(self, name, args):
+        return f'{name}({",".join(args)})'
 
 
 # a -> b
 # FunctionType(a, b)
 @dataclass(eq=False)
 class FunctionType(Type):
+    parens = [
+        'function_type.argument_type',
+        'application_type.function',
+        'application_type.argument',
+    ]
     argument_type: Type
     return_type: Type
 
-    def pretty(self, prec=None) -> str:
-        p = f'{self.argument_type.pretty()} -> {self.return_type.pretty()}'
-        if prec == 'argument':
-            return f'({p})'
-        else:
-            return p
+    def concrete(self, arg, ret):
+        return f'{arg} -> {ret}'
 
 
 # forall (a : k). body
 # ForallType(k, Scope(["a"], body))
 @dataclass(eq=False)
 class ForallType(Type):
+    parens = [
+        'function_type.argument_type',
+        'application_type.function',
+        'application_type.argument',
+    ]
     tyvar_kind: Kind
     scope: Scope[Type]
 
-    def pretty(self, prec=None) -> str:
-        p = f'forall ({self.scope.names[0]} : {self.tyvar_kind.pretty()}). {self.scope.body.pretty()}'
-        if prec == 'argument':
-            return f'({p})'
-        else:
-            return p
+    def concrete(self, k, sc):
+        [name], body = sc
+        return f'forall ({name} : {k}). {body}'
 
 
 # \(a : k) -> body
 # LambdaType(k, Scope(["a"], body))
 @dataclass(eq=False)
 class LambdaType(Type):
+    parens = [
+        'function_type.argument_type',
+        'application_type.function',
+        'application_type.argument',
+    ]
     tyvar_kind: Kind
     body: Scope[Type]
 
-    def pretty(self, prec=None) -> str:
-        p = f'\({self.body.names[0]} : {self.tyvar_kind.pretty()}) -> {self.body.body.pretty()}'
-        if prec in ['argument', 'function', 'argument']:
-            return f'({p})'
-        else:
-            return p
+    def concrete(self, k, sc):
+        [name], body = sc
+        return f'\({name} : {k}) -> {body}'
 
 
 # f a
 # ApplicationType(f, a)
 @dataclass(eq=False)
 class ApplicationType(Type):
+    parens = [
+        'application_type.argument',
+    ]
     function: Type
     argument: Type
 
-    def pretty(self, prec=None) -> str:
-        p = f'{self.function.pretty()} {self.argument.pretty()}'
-        if prec == 'argument':
-            return f'({p})'
-        else:
-            return p
+    def concrete(self, f, a):
+        return f'{f} {a}'
 
 
 ################  Declarations  ################
@@ -414,19 +413,33 @@ class ConstructorTermSignature(Core):
     parameters: List[Tuple[str, Type]]
     return_type: Type
 
+    def concrete(self, ps, ret):
+        if len(ps) == 0:
+            return f': {ret}'
+        else:
+            psp = ' '.join([
+                f'({n} : {t})'
+                for n, t in ps
+            ])
+            return f'{psp} : {ret}'
+
 
 @dataclass(eq=False)
 class ConstructorSignature(Core):
     type_parameters_kinds: List[Kind]
     term_signature: Scope[ConstructorTermSignature]
 
-    def pretty(self, prec=None) -> str:
-        ts = self.term_signature.body
-        return ' '.join([f'{{{v} : {k.pretty()}}}' for v, k in zip(self.term_signature.names, self.type_parameters_kinds)]) +\
-               ' ' +\
-               ' '.join([f'({v} : {k.pretty()})' for v, k in ts.parameters]) +\
-               ' ~> ' +\
-               ts.return_type.pretty()
+    def concrete(self, ks, tsigsc):
+        ns, tsig = tsigsc
+
+        if len(ks) == 0:
+            return tsig
+        else:
+            typarams = ' '.join([
+                f'{{{n} : {k}}}'
+                for n, k in zip(ns, ks)
+            ])
+            return f'{typarams} {tsig}'
 
 
 # | MkPair {a : Type} {b : Type} (x : a) (y : b) : Data.Pair$Pair(a;b);;
@@ -434,6 +447,10 @@ class ConstructorSignature(Core):
 class ConstructorDeclaration(Core):
     name: str
     signature: Scope[ConstructorSignature]
+
+    def concrete(self, name, sigsc):
+        _, sig = sigsc
+        return f'{name} {sig}'
 
 
 def ConstructorDeclaration_from_cst(tycon_params: List[str], cst: Tree) -> ConstructorDeclaration:
@@ -462,8 +479,8 @@ def ConstructorDeclaration_from_cst(tycon_params: List[str], cst: Tree) -> Const
 class TypeConstructorSignature(Core):
     parameters: List[TyVarKinding]
 
-    def pretty(self, prec=None) -> str:
-        return ' '.join([f'({tvk.tyvar} : {tvk.kind.pretty()})' for tvk in self.parameters])
+    def concrete(self, ps):
+        return ' '.join(ps)
 
 
 # data Pair (a : Type) (b : Type) where ...;;
@@ -472,6 +489,18 @@ class DataDeclaration(Declaration):
     name: str
     signature: TypeConstructorSignature
     constructors: List[ConstructorDeclaration]
+
+    def concrete(self, name, sig, cons):
+        consp = ''.join([
+            f'\n   | {c}'
+            for c in cons
+        ])
+
+        if sig == '':
+            sigp = ''
+        else:
+            sigp = f' {sig}'
+        return f'data {name}{sigp} where{consp}\n   ;;'
 
 
 ################  Patterns  ################
@@ -548,6 +577,9 @@ class CapturedVariablePattern(Pattern):
     def captured_variables(self) -> List[str]:
         return [self.var]
 
+    def concrete(self, n):
+        return n
+
 # _
 # WildcardVariablePattern()
 
@@ -557,6 +589,9 @@ class WildcardVariablePattern(Pattern):
 
     def captured_variables(self) -> List[str]:
         return []
+
+    def concrete(self):
+        return '_'
 
 
 # c(a0, ..., am; x0, ... an)
@@ -570,6 +605,11 @@ class ConstructorPattern(Pattern):
     def captured_variables(self) -> List[str]:
         return [v for pat in self.type_arguments for v in pat.captured_variables()] +\
           [v for pat in self.arguments for v in pat.captured_variables()]
+
+    def concrete(self, c, targs, args):
+        targsp = ','.join(targs)
+        argsp = ','.join(args)
+        return f'{c}({targsp};{argsp})'
 
 
 ################  Terms  ################
@@ -649,9 +689,6 @@ def Term_from_cst(cst: Tree) -> Term:
 class VariableTerm(Term):
     name: str
 
-    def pretty(self, prec=None) -> str:
-        return f'{self.name}'
-
     def rename(self, renaming):
         if renaming == {}:
             return self
@@ -662,18 +699,33 @@ class VariableTerm(Term):
         else:
             return self
 
+    def concrete(self, n):
+        return n
+
 
 # x : a
 # AnnotationTerm(VariableTerm("x"), VariableType("a"))
 @dataclass(eq=False)
 class TypeAnnotationTerm(Term):
+    parens = [
+        'type_annotation_term.term',
+        'application_term.function',
+        'application_term.argument',
+        'instantiation_term.function',
+    ]
     term: Term
     type: Type
+
+    def concrete(self, m, t):
+        return f'{m} : {t}'
 
 
 @dataclass(eq=False)
 class DeclaredTermNameTerm(Term):
     name: DeclaredTermName
+
+    def concrete(self, n):
+        return n
 
 
 # c(a0, ..., am; x0, ..., xn)
@@ -684,38 +736,70 @@ class ConstructorTerm(Term):
     type_arguments: List[Type]
     arguments: List[Term]
 
-    def pretty(self, prec=None):
-        return f'{self.constructor}({",".join([t.pretty() for t in self.type_arguments])};{",".join([m.pretty() for m in self.arguments])})'
+    def concrete(self, c, tyargs, args):
+        return f'{c}({",".join(tyargs)};{",".join(args)})'
 
 
 # \x -> body
 # LambdaTerm(Scope(["x"], body))
 @dataclass(eq=False)
 class LambdaTerm(Term):
+    parens = [
+        'type_annotation_term.term',
+        'application_term.function',
+        'application_term.argument',
+        'instantiation_term.function',
+    ]
     body: Scope[Term]
+
+    def concrete(self, sc):
+        [n], b = sc
+        return f'\\{n} -> {b}'
 
 
 # f x
 # ApplicationTerm(f, x)
 @dataclass(eq=False)
 class ApplicationTerm(Term):
+    parens = [
+        'application_term.argument',
+    ]
     function: Term
     argument: Term
+
+    def concrete(self, fun, arg):
+        return f'{fun} {arg}'
 
 
 #\{a} -> body
 # AbstractionTerm(Scope(["a"], body))
 @dataclass(eq=False)
 class AbstractionTerm(Term):
+    parens = [
+        'type_annotation_term.term',
+        'application_term.function',
+        'application_term.argument',
+        'instantiation_term.function',
+    ]
     body: Scope[Term]
+
+    def concrete(self, sc):
+        [n], b = sc
+        return f'\\{{{n}}} -> {b}'
 
 
 # f {a}
 # InstantiationTerm(f, a)
 @dataclass(eq=False)
 class InstantiationTerm(Term):
+    parens = [
+        'application_term.argument'
+    ]
     function: Term
     argument: Type
+
+    def concrete(self, fun, arg):
+        return f'{fun} {{{arg}}}'
 
 
 # | p0 | ... | pn -> body
@@ -724,6 +808,11 @@ class InstantiationTerm(Term):
 class CaseClause(Core):
     patterns: List[Pattern]
     body: Scope[Term]
+
+    def concrete(self, ps, bsc):
+        psp = ' | '.join(ps)
+        _, b = bsc
+        return f'| {psp} -> {b}'
 
 
 def CaseClause_from_cst(cst: Tree) -> CaseClause:
@@ -742,6 +831,11 @@ class CaseTerm(Term):
     scrutinees: List[Term]
     clauses: List[CaseClause]
 
+    def concrete(self, scruts, cls):
+        scrutsp = ' | '.join(scruts)
+        clsp = '\n'.join(cls)
+        return f'case {scrutsp} where\n{clsp}\n;;'
+
 
 ################  Term Declaration  ################
 
@@ -753,6 +847,10 @@ class TermDeclaration(Declaration):
     type: Type
     definition: Term
 
+    def concrete(self, name, type, definition):
+        indent = len(name)*' '
+        return f'{name} : {type}\n{indent} = {definition}\n{indent} ;;'
+
 
 ################  Modules  ################
 
@@ -760,6 +858,9 @@ class TermDeclaration(Declaration):
 @dataclass(eq=False)
 class Module(Core):
     declarations: List[Declaration]
+
+    def concrete(self, declarations):
+        return '\n\n'.join(declarations)
 
 
 def Module_from_cst(cst: Tree) -> Module:

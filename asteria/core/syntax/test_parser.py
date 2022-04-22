@@ -11,4 +11,10 @@ with path.open() as f:
 
 cst = concrete.parse(path, src)
 print(cst.pretty())
-print(abstract.Module_from_cst(cst))
+
+print()
+print(80*'-')
+print()
+
+mod = abstract.Module_from_cst(cst)
+print(mod.pretty())
