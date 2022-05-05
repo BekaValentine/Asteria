@@ -1,0 +1,3 @@
+f : forall {a : Type}. a
+  = Test$x
+  ;;

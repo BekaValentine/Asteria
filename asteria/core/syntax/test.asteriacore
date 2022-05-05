@@ -1,9 +1,11 @@
-id : forall (a : Type). a -> a
+data Empty;;
+
+id : forall {a : Type}. a -> a
    = \{a} -> \x -> (x : (\(b : Type) -> b) a)
    ;;
 
 -- data Foo (f : Type) where
---  | MkFoo (x : forall (g : Type -> Type). (\(a : Type) -> g a) Test$Foo(f) -> Test$Foo(f)) : Test$Foo(f)
+--  | MkFoo (x : forall {g : Type -> Type}. (\(a : Type) -> g a) Test$Foo(f) -> Test$Foo(f)) : Test$Foo(f)
 --  ;;
 
 -- module where
@@ -24,14 +26,15 @@ data Nat where
 
 --zero : Test$Nat() = Suc(;Zero(;));;
 
-data Interesting (a : Type) where
-   | Wrap (x : a) : Test$Interesting(a)
-   | Wrap2 {b : Type} (x : b) : Test$Interesting(b)
+data Interesting [a : Type] where
    | Ze : Test$Interesting(Test$Nat())
+   | Wrap (x : a) : Test$Interesting(a)
+   | Wrap2 {a : Type} (x : a) : Test$Interesting(a)
    ;;
 
 f : Test$Interesting(Test$Bool())
-  = Wrap2(Test$Bool();True(;));;
+  = Wrap2(Test$Bool();True(;))
+  ;;
 
 -- (+) : Nat -> Nat -> Nat;;
 -- Zero + n = n;;
@@ -82,21 +85,21 @@ data List (a : Type) where
   | Cons (x : a) (xs : Test$List(a)) : Test$List(a)
   ;;
 
--- map : forall (a b : Type). (a -> b) -> List a -> List b;;
+-- map : forall {a b : Type}. (a -> b) -> List a -> List b;;
 -- map _ Nil = Nil;;
 -- map f (Cons x xs) = Cons (f x) (map f xs);;
-map : forall (a : Type). forall (b : Type). (a -> b) -> Test$List(a) -> Test$List(b)
+map : forall {a : Type}. forall {b : Type}. (a -> b) -> Test$List(a) -> Test$List(b)
   = \{a} -> \{b} -> \f -> \xs ->
   case xs of
     | Nil(;) -> Nil(;) : Test$List(b)
     | Cons(; x, xs) -> Cons(; f x, Test$map {a} {b} f xs) : Test$List(b)
     ;;
 
--- lookup : forall (a : Type). Nat -> List a -> Maybe a;;
+-- lookup : forall {a : Type}. Nat -> List a -> Maybe a;;
 -- lookup Zero    (Cons x _)  = Just x;;
 -- lookup (Suc i) (Cons _ xs) = lookup i xs;;
 -- lookup _       _           = Nothing;;
-lookup : forall (a : Type). Test$Nat() -> Test$List(a) -> Test$Maybe(a)
+lookup : forall {a : Type}. Test$Nat() -> Test$List(a) -> Test$Maybe(a)
   = \{a} -> \i -> \xs ->
   case i | xs of
     | Zero(;) | Cons(; x, _) -> Just(;x) : Test$Maybe(a)
@@ -107,13 +110,25 @@ lookup : forall (a : Type). Test$Nat() -> Test$List(a) -> Test$Maybe(a)
 --------------------------------------------------------------------------------
 
 -- module where
--- class forall (f : Type -> Type). Functor f where
+-- class forall {f : Type -> Type}. Functor f where
 --   | fmap : forall (a b : Type). (a -> b) -> f a -> f b
 --   ;;
 
 data Functor (f : Type -> Type) where
-   | MkFunctor (fmap : forall (a : Type). forall (b : Type). (a -> b) -> f a -> f b) : Test$Functor(\(a : Type) -> f a)
+   | MkFunctor (fmap : forall {a : Type}. forall {b : Type}. (a -> b) -> f a -> f b) : Test$Functor(f)
    ;;
+
+--------------------------------------------------------------------------------
+
+data Exists (f : Type -> Type) [a : Type] where
+  | Witness {b : Type} (x : f b) : Test$Exists(f, b)
+  ;;
+
+x : forall {f : Type -> Type}. forall {a : Type}.
+      Test$Exist(f,a) -> Test$Exist(f,a)
+  = \{f} -> \{a} -> \w -> case w of
+      | Witness(.a; y) -> Witness(a;y)
+      ;;
 
 --------------------------------------------------------------------------------
 
@@ -134,7 +149,7 @@ data Prod (a : Type) (b : Type) where
 --   | Test unqualified
 --   | Test unqualified
 -- where
--- data LC (a : Type) where
+-- data LC [a : Type] where
 --    | LCTriv                                          : LC Unit
 --    | LCPair {a b : Type} (x : LC a) (y : LC b)       : LC (Prod a b)
 --    | LCFst {a b : Type} (p : LC (Prod a b))          : LC a
@@ -142,7 +157,7 @@ data Prod (a : Type) (b : Type) where
 --    | LCLam {a b : Type} (f : LC a -> LC b)           : LC (a -> b)
 --    | LCApp {a b : Type} (f : LC (a -> b)) (x : LC a) : LC b
 --    ;;
-data LC (a : Type) where
+data LC [a : Type] where
   | LCTriv : Test$LC(Test$Unit())
   | LCPair {a : Type} {b : Type} (x : Test$LC(a)) (y : Test$LC(b)) : Test$LC(Test$Prod(a,b))
   | LCFst {a : Type} {b : Type} (p : Test$LC(Test$Prod(a,b))) : Test$LC(a)

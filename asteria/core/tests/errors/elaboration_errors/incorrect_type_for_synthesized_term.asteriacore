@@ -1,0 +1,6 @@
+data A;;
+data B;;
+
+x : Test$A() = Test$x;;
+
+y : Test$B() = Test$x;;

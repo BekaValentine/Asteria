@@ -89,9 +89,15 @@ tyvarkinding: _LPAR VARNAME _COLON _kind _RPAR
 
 ////////////////  Data Declarations  ////////////////
 
-data_declaration: _DATA CONNAME tyvarkindings _WHERE constructor_declarations _DOUBLESEMI
+data_declaration: _DATA CONNAME data_declaration_arguments (_WHERE constructor_declarations)? _DOUBLESEMI
+data_declaration_arguments: _data_declaration_argument*
+_data_declaration_argument: parameter_argument
+                          | index_argument
 
-constructor_declarations: constructor_declaration*
+parameter_argument: _LPAR VARNAME _COLON _kind _RPAR
+index_argument: _LBRACK VARNAME _COLON _kind _RBRACK
+
+constructor_declarations: constructor_declaration+
 constructor_declaration: _PIPE CONNAME constructor_decl_type_arguments constructor_decl_arguments _COLON _type
 
 constructor_decl_type_arguments: constructor_decl_type_argument*
@@ -161,7 +167,7 @@ _function_type_left: variable_type
                    | application_type
                    | paren_type
 
-forall_type: _FORALL tyvarkinding _DOT _type
+forall_type: _FORALL _LBRACE VARNAME _COLON _kind _RBRACE _DOT _type
 
 application_type: _application_type_left _application_type_right
 _application_type_left: variable_type
@@ -193,10 +199,15 @@ variable_pattern: VARNAME
 wildcard_pattern: _UNDER
 
 constructor_pattern: CONNAME _LPAR constructor_pattern_type_arguments _SEMI constructor_pattern_term_arguments _RPAR
-_type_pattern: variable_type_pattern
-             | wildcard_type_pattern
-variable_type_pattern: VARNAME
-wildcard_type_pattern: _UNDER
+_type_pattern: captured_variable_type_pattern
+             | wildcard_variable_type_pattern
+             | assertion_type_pattern
+captured_variable_type_pattern: VARNAME
+wildcard_variable_type_pattern: _UNDER
+assertion_type_pattern: _DOT _assertion_type_pattern_type
+_assertion_type_pattern_type: variable_type
+                            | constructor_type
+                            | paren_type
 constructor_pattern_type_arguments: _sepby0{_type_pattern, _COMMA}
 constructor_pattern_term_arguments: _sepby0{_pattern, _COMMA}
 

@@ -207,13 +207,12 @@ def Type_from_cst(cst: Tree) -> Type:
             return_type=Type_from_cst(cst.children[1]))
 
     elif cst.data == 'forall_type':
-        tvk = TyVarKinding_from_cst(cst.children[0])
         return ForallType(
             source=cst,
-            tyvar_kind=tvk.kind,
+            tyvar_kind=Kind_from_cst(cst.children[1]),
             scope=Scope(
-                names=[tvk.tyvar],
-                body=Type_from_cst(cst.children[1])))
+                names=[cast(Token, cst.children[0]).value],
+                body=Type_from_cst(cst.children[2])))
 
     elif cst.data == 'lambda_type':
         tvk = TyVarKinding_from_cst(cst.children[0])
@@ -295,6 +294,7 @@ class FunctionType(Type):
         'function_type.argument_type',
         'application_type.function',
         'application_type.argument',
+        'assertion_type_pattern.type',
     ]
     argument_type: Type
     return_type: Type
@@ -311,6 +311,7 @@ class ForallType(Type):
         'function_type.argument_type',
         'application_type.function',
         'application_type.argument',
+        'assertion_type_pattern.type',
     ]
     tyvar_kind: Kind
     scope: Scope[Type]
@@ -328,6 +329,7 @@ class LambdaType(Type):
         'function_type.argument_type',
         'application_type.function',
         'application_type.argument',
+        'assertion_type_pattern.type',
     ]
     tyvar_kind: Kind
     body: Scope[Type]
@@ -343,6 +345,7 @@ class LambdaType(Type):
 class ApplicationType(Type):
     parens = [
         'application_type.argument',
+        'assertion_type_pattern.type',
     ]
     function: Type
     argument: Type
@@ -360,15 +363,20 @@ class Declaration(Core):
 
 def Declaration_from_cst(cst: Tree) -> Declaration:
     if cst.data == 'data_declaration':
-        params = [TyVarKinding_from_cst(tvk)
-                  for tvk in cst.children[1].children]
+        args = [DataDeclarationArgument_from_cst(tvk)
+                for tvk in cst.children[1].children]
+
+        cons = []
+        if len(cst.children) == 3:
+            cons = [ConstructorDeclaration_from_cst(
+                args, condecl) for condecl in cst.children[2].children]
         return DataDeclaration(
             source=cst,
             name=cast(Token, cst.children[0]).value,
             signature=TypeConstructorSignature(
                 source=None,
-                parameters=params),
-            constructors=[ConstructorDeclaration_from_cst([tvk.tyvar for tvk in params], condecl) for condecl in cst.children[2].children])
+                arguments=args),
+            constructors=cons)
     elif cst.data == 'term_declaration':
         return TermDeclaration(
             source=cst,
@@ -380,6 +388,38 @@ def Declaration_from_cst(cst: Tree) -> Declaration:
 
 
 ################  Data Declarations  ################
+
+
+@dataclass(eq=False)
+class DataDeclarationArgument(Core):
+    tyvar: str
+    kind: Kind
+
+
+@dataclass(eq=False)
+class ParameterArgument(DataDeclarationArgument):
+    def concrete(self, v, k):
+        return f'({v} : {k})'
+
+
+@dataclass(eq=False)
+class IndexArgument(DataDeclarationArgument):
+    def concrete(self, v, k):
+        return f'[{v} : {k}]'
+
+
+def DataDeclarationArgument_from_cst(cst: Tree) -> DataDeclarationArgument:
+    if cst.data == 'parameter_argument':
+        return ParameterArgument(
+            source=cst,
+            tyvar=cast(Token, cst.children[0]).value,
+            kind=Kind_from_cst(cst.children[1]))
+    elif cst.data == 'index_argument':
+        return IndexArgument(
+            source=cst,
+            tyvar=cast(Token, cst.children[0]).value,
+            kind=Kind_from_cst(cst.children[1]))
+    raise
 
 
 @dataclass(eq=False)
@@ -442,7 +482,7 @@ class ConstructorSignature(Core):
             return f'{typarams} {tsig}'
 
 
-# | MkPair {a : Type} {b : Type} (x : a) (y : b) : Data.Pair$Pair(a;b);;
+# | MkPair {a : Type} {b : Type} (x : a) (y : b) : Data.Pair$Pair(a;b)
 @dataclass(eq=False)
 class ConstructorDeclaration(Core):
     name: str
@@ -453,7 +493,7 @@ class ConstructorDeclaration(Core):
         return f'{name} {sig}'
 
 
-def ConstructorDeclaration_from_cst(tycon_params: List[str], cst: Tree) -> ConstructorDeclaration:
+def ConstructorDeclaration_from_cst(tycon_args: List[DataDeclarationArgument], cst: Tree) -> ConstructorDeclaration:
     type_params = [ConstructorDeclTypeArgument_from_cst(
         typaram) for typaram in cst.children[1].children]
     params = [ConstructorDeclArgument_from_cst(
@@ -463,7 +503,7 @@ def ConstructorDeclaration_from_cst(tycon_params: List[str], cst: Tree) -> Const
             source=cst,
             name=cast(Token, cst.children[0]).value,
             signature=Scope(
-                names=tycon_params,
+                names=[arg.tyvar for arg in tycon_args],
                 body=ConstructorSignature(
                     source=None,
                     type_parameters_kinds=[tp.kind for tp in type_params],
@@ -477,7 +517,7 @@ def ConstructorDeclaration_from_cst(tycon_params: List[str], cst: Tree) -> Const
 
 @dataclass(eq=False)
 class TypeConstructorSignature(Core):
-    parameters: List[TyVarKinding]
+    arguments: List[DataDeclarationArgument]
 
     def concrete(self, ps):
         return ' '.join(ps)
@@ -491,55 +531,84 @@ class DataDeclaration(Declaration):
     constructors: List[ConstructorDeclaration]
 
     def concrete(self, name, sig, cons):
-        consp = ''.join([
-            f'\n   | {c}'
-            for c in cons
-        ])
-
         if sig == '':
             sigp = ''
         else:
             sigp = f' {sig}'
-        return f'data {name}{sigp} where{consp}\n   ;;'
+
+        if len(self.constructors) == 0:
+            return f'data {name}{sigp};;'
+
+        else:
+            consp = ''.join([
+                f'\n   | {c}'
+                for c in cons
+            ])
+
+            return f'data {name}{sigp} where{consp}\n   ;;'
 
 
 ################  Patterns  ################
 
 
 @dataclass(eq=False)
-class TypeVariablePattern(Core):
+class TypePattern(Core):
 
     def captured_variables(self) -> List[str]:
         return []
 
 
-def TypeVariablePattern_from_cst(cst: Tree) -> TypeVariablePattern:
-    if cst.data == 'variable_type_pattern':
-        return CapturedTypeVariablePattern(
+# @dataclass(eq=False)
+# class VariableTypePattern(TypePattern):
+#
+#     def captured_variables(self) -> List[str]:
+#         return []
+
+
+def TypePattern_from_cst(cst: Tree) -> TypePattern:
+    if cst.data == 'captured_variable_type_pattern':
+        return CapturedVariableTypePattern(
             source=cst,
             tyvar=cast(Token, cst.children[0]).value)
-    elif cst.data == 'wildcard_type_pattern':
-        return WildcardTypeVariablePattern(source=cst)
+    elif cst.data == 'wildcard_variable_type_pattern':
+        return WildcardVariableTypePattern(source=cst)
+    elif cst.data == 'assertion_type_pattern':
+        return AssertionTypePattern(
+            source=cst,
+            type=Type_from_cst(cst.children[0]))
     raise
 
 
 # a
-# CapturedTypeVariablePattern("a")
+# CapturedVariableTypePattern("a")
 @dataclass(eq=False)
-class CapturedTypeVariablePattern(TypeVariablePattern):
+class CapturedVariableTypePattern(TypePattern):
     tyvar: str
 
     def captured_variables(self) -> List[str]:
         return [self.tyvar]
 
+    def concrete(self, n):
+        return n
+
 
 # _
-# WildcardTypeVariablePattern()
+# WildcardVariableTypePattern()
 @dataclass(eq=False)
-class WildcardTypeVariablePattern(TypeVariablePattern):
+class WildcardVariableTypePattern(TypePattern):
 
-    def captured_variables(self) -> List[str]:
-        return []
+    def concrete(self):
+        return '_'
+
+
+# .p
+# AssertionTypePattern(p)
+@dataclass(eq=False)
+class AssertionTypePattern(TypePattern):
+    type: Type
+
+    def concrete(self, t):
+        return f'.{t}'
 
 
 @dataclass(eq=False)
@@ -562,7 +631,7 @@ def Pattern_from_cst(cst: Tree) -> Pattern:
         return ConstructorPattern(
             source=cst,
             constructor=cast(Token, cst.children[0]).value,
-            type_arguments=[TypeVariablePattern_from_cst(
+            type_arguments=[TypePattern_from_cst(
                 pat) for pat in cst.children[1].children],
             arguments=[Pattern_from_cst(pat) for pat in cst.children[2].children])
     raise
@@ -599,7 +668,7 @@ class WildcardVariablePattern(Pattern):
 @dataclass(eq=False)
 class ConstructorPattern(Pattern):
     constructor: str
-    type_arguments: List[TypeVariablePattern]
+    type_arguments: List[TypePattern]
     arguments: List[Pattern]
 
     def captured_variables(self) -> List[str]:
@@ -681,6 +750,26 @@ def Term_from_cst(cst: Tree) -> Term:
         return Term_from_cst(cst.children[0])
 
     raise
+
+
+# x
+# MetaSyntacticVariableTerm("x")
+@dataclass(eq=False)
+class MetaSyntacticVariableTerm(Type):
+    name: str
+
+    def rename(self, renaming):
+        if renaming == {}:
+            return self
+        if self.name in renaming:
+            return VariableType(
+                source=self.source,
+                name=renaming[self.name])
+        else:
+            return self
+
+    def concrete(self, name):
+        return name
 
 
 # x
@@ -824,7 +913,7 @@ def CaseClause_from_cst(cst: Tree) -> CaseClause:
         body=Scope(bound_vars, Term_from_cst(cst.children[1])))
 
 
-# case s0 | ... | sn where clauses;;
+# case s0 | ... | sn where clauses
 # CaseTerm([s0, ..., sn], clauses)
 @dataclass(eq=False)
 class CaseTerm(Term):
@@ -834,7 +923,7 @@ class CaseTerm(Term):
     def concrete(self, scruts, cls):
         scrutsp = ' | '.join(scruts)
         clsp = '\n'.join(cls)
-        return f'case {scrutsp} where\n{clsp}\n;;'
+        return f'case {scrutsp} where\n{clsp}'
 
 
 ################  Term Declaration  ################

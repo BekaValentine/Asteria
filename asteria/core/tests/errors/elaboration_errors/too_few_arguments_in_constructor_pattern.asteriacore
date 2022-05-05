@@ -1,0 +1,8 @@
+data Id (a : Type) where
+   | MkId (x : a) : Test$Id(a)
+   ;;
+
+x : forall {a : Type}. Test$Id(a) -> a
+  = \{a} -> \i ->
+      case i of
+         | MkId(;) -> x;;

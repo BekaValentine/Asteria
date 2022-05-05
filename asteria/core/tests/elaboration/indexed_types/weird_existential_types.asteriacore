@@ -1,0 +1,26 @@
+data Exists (f : Type -> Type) [a : Type] where
+   | Witness {b : Type} (x : b) : Test$Exists(f, b)
+   ;;
+
+f : forall {f : Type -> Type}. forall {a : Type}.
+      Test$Exists(f,a) -> Test$Exists(f,a)
+  = \{f} -> \{a} -> \w ->
+      case w of
+         | Witness(.a; x) -> Witness(a; x) : Test$Exists(f,a)
+         ;;
+
+data A;;
+data B;;
+
+data Ix [a : Type] where
+  | MkA : Test$Ix(Test$A())
+  | MkB : Test$Ix(Test$B())
+  ;;
+
+g : forall {a : Type}.
+      Test$Exists(\(a : Type) -> Test$Ix(a),a) -> Test$Exists(\(a : Type) -> Test$Ix(a),a)
+  = \{a} -> \w ->
+      case w of
+         | Witness(.Test$A(); MkA(;)) -> Witness(Test$A(); MkA(;)) : Test$Exists(\(a : Type) -> Test$Ix(a), Test$A())
+         | Witness(.Test$B(); MkB(;)) -> Witness(Test$B(); MkB(;)) : Test$Exists(\(a : Type) -> Test$Ix(a), Test$B())
+         ;;

@@ -1,0 +1,14 @@
+data Id [a : Type] where
+   | MkId {b : Type} : Test$Id(b)
+   ;;
+
+data A;;
+data B where
+   | MkB : Test$B()
+   ;;
+
+f : Test$Id(Test$A()) -> Test$B()
+  = \x ->
+      case x of
+         | MkId(.Test$A();) -> MkB(;) : Test$B()
+         ;;

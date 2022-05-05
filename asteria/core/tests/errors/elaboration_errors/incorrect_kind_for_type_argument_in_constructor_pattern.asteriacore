@@ -1,0 +1,8 @@
+data T where
+   | MkT {a : Type} : Test$T()
+   ;;
+
+x : Test$T()
+  = case Test$x of
+      | MkT(.(\(a : Type) -> a);) -> MkT(Test$T();)
+      ;;

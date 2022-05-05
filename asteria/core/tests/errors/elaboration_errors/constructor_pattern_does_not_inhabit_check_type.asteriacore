@@ -1,0 +1,11 @@
+data A;;
+data B;;
+data Ix [a : Type] where
+   | MkA : Test$Ix(Test$A())
+   | MkB : Test$Ix(Test$B())
+   ;;
+
+x : forall {a : Type}. a
+  = case MkA(;) : Test$Ix(Test$A()) of
+       | MkB(;) -> Test$x
+       ;;

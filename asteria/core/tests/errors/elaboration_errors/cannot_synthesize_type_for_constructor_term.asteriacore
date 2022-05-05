@@ -1,0 +1,7 @@
+data Unit where
+   | MkUnit : Test$Unit()
+   ;;
+
+x : Test$Unit()
+  = MkUnit(;) Test$x
+  ;;

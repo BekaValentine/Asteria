@@ -1,3 +1,3 @@
-x : forall (f : Type -> Type). f
+x : forall {f : Type -> Type}. f
   = x
   ;;

@@ -1,6 +1,6 @@
-f : forall (foo : Type).
-    forall (bar : Type).
-    forall (baz : Type).
+f : forall {foo : Type}.
+    forall {foo : Type}.
+    forall {foo : Type}.
       barr
   = f
   ;;

@@ -1,0 +1,8 @@
+data Pair (a : Type) (b : Type) where
+   | MkPair (x : a) (y : b) : Test$Pair(a,b)
+   ;;
+
+x : forall {a : Type}. Test$Pair(a,a) -> a
+  = case x of
+       | MkPair(;x,x) -> x
+       ;;

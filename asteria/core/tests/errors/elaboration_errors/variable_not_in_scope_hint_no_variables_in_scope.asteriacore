@@ -1,0 +1,2 @@
+f : forall {a : Type}. a
+  = \{a} -> x;;

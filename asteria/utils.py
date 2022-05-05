@@ -29,6 +29,7 @@ def fresh_variable(old: List[str], name: str):
 
 
 def fresh_variables(olds: List[str], names: List[str]) -> List[str]:
+    olds = [*olds]
     news = []
     for name in names:
         new = fresh_variable(olds, name)
@@ -39,7 +40,7 @@ def fresh_variables(olds: List[str], names: List[str]) -> List[str]:
 
 @dataclass(eq=False)
 class Syntax(object):
-    paren: ClassVar[List[str]] = []
+    parens: ClassVar[List[str]] = []
     source: Optional[lark.Tree]
 
     def __eq__(self, other) -> bool:
@@ -80,7 +81,7 @@ class Syntax(object):
                     part, f'{construct_name}.{partloc}'))
 
         p = self.concrete(*parts)
-        if loc in self.paren:
+        if loc in self.parens:
             p = f'({p})'
         return p
 

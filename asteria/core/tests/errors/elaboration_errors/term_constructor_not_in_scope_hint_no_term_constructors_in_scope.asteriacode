@@ -1,4 +1,4 @@
-data Foo where ;;
+data Foo;;
 
 x : Test$Foo()
   = Bar(;)

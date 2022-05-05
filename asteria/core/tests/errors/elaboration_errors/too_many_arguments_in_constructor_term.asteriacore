@@ -2,6 +2,6 @@ data Id (a : Type) where
    | MkId (x : a) : Test$Id(a)
    ;;
 
-x : forall (a : Type). a -> Test$Id(a)
+x : forall {a : Type}. a -> Test$Id(a)
   = \{a} -> \x -> MkId(;x,x)
   ;;

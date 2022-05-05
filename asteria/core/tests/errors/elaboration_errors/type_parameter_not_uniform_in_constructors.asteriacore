@@ -1,0 +1,4 @@
+data Foo (a : Type) where
+   | MkFoo1 : Test$Foo(a)
+   | MkFoo2 {b : Type} : Test$Foo(b -> b)
+   ;;

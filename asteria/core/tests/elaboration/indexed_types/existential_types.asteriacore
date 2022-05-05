@@ -1,0 +1,10 @@
+data Exists (f : Type -> Type) where
+   | Witness {a : Type} (x : a) : Test$Exists(f)
+   ;;
+
+f : forall {f : Type -> Type}.
+      Test$Exists(f) -> Test$Exists(f)
+  = \{f} -> \w ->
+      case w of
+         | Witness(a; x) -> Witness(a; x) : Test$Exists(f)
+         ;;

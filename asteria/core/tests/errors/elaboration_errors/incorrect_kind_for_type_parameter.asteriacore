@@ -1,4 +1,4 @@
-data F (a : Type) where ;;
+data F (a : Type);;
 
 x : Test$F(\(a : Type) -> a)
   = x

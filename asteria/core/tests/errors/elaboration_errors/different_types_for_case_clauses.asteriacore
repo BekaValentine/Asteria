@@ -1,0 +1,19 @@
+data A where
+   | MkA : Test$A()
+   ;;
+
+data B where
+   | MkB : Test$B()
+   ;;
+
+data Bool where
+   | True : Test$Bool()
+   | False : Test$Bool()
+   ;;
+
+x : Test$Bool() -> Test$Bool()
+  = \b ->
+      case b of
+         | y -> MkA(;) : Test$A()
+         | z -> MkB(;) : Test$B()
+         ;;

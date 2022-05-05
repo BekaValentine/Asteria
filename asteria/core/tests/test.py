@@ -17,7 +17,14 @@ if args[0] == 'errors':
 
     files_to_test = []
 
-    if len(args) == 1:
+    files = []
+    show = False
+
+    if len(args) > 1 and args[1] == '--show':
+        files = args[2:]
+        show = True
+
+    if len(files) == 0:
 
         prefix_length = len(str(Path(__file__).parent))+1
         errors_path = Path(__file__).parent / 'errors'
@@ -30,43 +37,27 @@ if args[0] == 'errors':
 
     else:
 
-        for arg in args[1:]:
-            if '/' in arg:
-                i = arg.rindex('/')
-                files_to_test.append((arg[:i], arg[i+1:]))
+        for file in files:
+            if '/' in file:
+                i = file.rindex('/')
+                files_to_test.append((file[:i], file[i+1:]))
             else:
-                files_to_test.append(('.', arg))
+                files_to_test.append(('.', file))
 
     # Testing Errors
 
     print()
     print('ERROR TESTS ' + 68*'=')
 
-    # prefix_length = len(str(Path(__file__).parent))+1
-    # errors_path = Path(__file__).parent / 'errors'
-    # first = True
-    # for dir_path, dirs, files in os.walk(errors_path):
-    #
-    #     for file in sorted(files):
-    #         if file[-len('.asteriacore'):] == '.asteriacore':
-
     first = True
     for dir_path, file in files_to_test:
 
         test_path = Path(dir_path) / file
 
-        print()
-
         if not os.path.exists(test_path):
             print(f'Invalid file path: {test_path}')
 
             continue
-
-        if first:
-            first = False
-        else:
-            print(80*'-')
-            print()
 
         with open(test_path) as f:
             src = f.read()
@@ -77,8 +68,15 @@ if args[0] == 'errors':
 
         elaborator = static.Elaborator()
 
-        if __name__ == '__main__':
-            assert abstract.TypeKind(None) == abstract.TypeKind(cst)
+        if show:
+            print()
+
+            if first:
+                first = False
+            else:
+                print(80*'-')
+                print()
+
             try:
                 elaborator.elab_module(['Test'], mod)
 
@@ -90,5 +88,79 @@ if args[0] == 'errors':
             with pytest.raises(errors.ElabError):
 
                 elaborator.elab_module(['Test'], mod)
+
+    print()
+
+elif args[0] == 'elaboration':
+
+    files_to_test = []
+
+    files = args[1:]
+    show = False
+
+    if len(files) == 0:
+
+        prefix_length = len(str(Path(__file__).parent))+1
+        elab_path = Path(__file__).parent / 'elaboration'
+        first = True
+        for dir_path, dirs, files in os.walk(elab_path):
+
+            for file in sorted(files):
+                if file[-len('.asteriacore'):] == '.asteriacore':
+                    files_to_test.append((dir_path, file))
+
+    else:
+
+        for file in files:
+            if '/' in file:
+                i = file.rindex('/')
+                files_to_test.append((file[:i], file[i+1:]))
+            else:
+                files_to_test.append(('.', file))
+
+    # Testing Errors
+
+    print()
+    print('ELABORATION TESTS ' + 68*'=')
+
+    # prefix_length = len(str(Path(__file__).parent))+1
+    # errors_path = Path(__file__).parent / 'errors'
+    # first = True
+    # for dir_path, dirs, files in os.walk(errors_path):
+    #
+    #     for file in sorted(files):
+    #         if file[-len('.asteriacore'):] == '.asteriacore':
+
+    no_errors = True
+    first = True
+    for dir_path, file in files_to_test:
+
+        test_path = Path(dir_path) / file
+
+        if not os.path.exists(test_path):
+            print(f'Invalid file path: {test_path}')
+
+            continue
+
+        with open(test_path) as f:
+            src = f.read()
+
+        cst = concrete.parse(test_path, src)
+
+        mod = abstract.Module_from_cst(cst)
+
+        elaborator = static.Elaborator()
+
+        try:
+            elaborator.elab_module(['Test'], mod)
+
+        except errors.ElabError as err:
+            no_errors = False
+            print()
+            print(err.pretty())
+
+    if no_errors:
+        print()
+        print('All elaboration tests successful.')
 
     print()

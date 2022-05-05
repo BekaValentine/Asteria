@@ -1,0 +1,15 @@
+foo : forall {a : Type}. a -> a
+    = \{a} -> \x -> x
+    ;;
+
+bar : forall {a : Type}. a -> a
+    = \{a} -> \x -> x
+    ;;
+
+baz : forall {a : Type}. a -> a
+    = \{a} -> \x -> x
+    ;;
+
+f : forall {a : Type}. a
+  = Test$baar
+  ;;

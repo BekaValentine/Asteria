@@ -1,0 +1,5 @@
+data Foo;;
+
+x : Test$Foo()
+  = case Test$x of
+       | Bar(;) -> Test$x;;
